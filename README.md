@@ -150,3 +150,11 @@ Supported muscle keys: `chest`, `shoulders`, `rear_delts`, `biceps`, `triceps`, 
 - Images are stored locally in `data/uploads/` and served at `/uploads/` by Express.
 - Everyone shares the same exercise/food library; workouts, meals, and routines are per person.
 - There is no login. Ascent is meant for a trusted home network — don't expose it to the internet.
+
+---
+
+## License
+
+[PolyForm Noncommercial 1.0.0](LICENSE). You're free to use, change and share Ascent for any noncommercial purpose — personal use, hobby projects, research, education, charities. Commercial use isn't permitted.
+
+Third-party material keeps its own terms: the muscle diagram data is from [vulovix/body-muscles](https://github.com/vulovix/body-muscles) (Apache 2.0), and the bundled two-frame exercise photos are from free-exercise-db (CC0).
