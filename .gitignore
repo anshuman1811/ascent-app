@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Build output
+client/dist/
+
+# Local data (database + uploaded images) — never committed; each install starts fresh
+data/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# pm2 runtime
+.pm2/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# Claude Code session files
+.claude/
+
+# Exercise demo GIFs — fetched by server/scripts/download-exercise-gifs.py from a
+# non-commercially-licensed dataset, so they aren't redistributed here
+client/public/exercises/*.gif
