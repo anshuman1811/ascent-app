@@ -7,6 +7,7 @@ This takes about five minutes. At the end you'll have Ascent running on your com
 - A Mac or Linux computer that stays on when you want to use the app (it is the server)
 - [Node.js 20](https://nodejs.org). If you don't have Node, `setup.sh` installs it through [nvm](https://github.com/nvm-sh/nvm)
 - `git`
+- Windows isn't supported directly; use [WSL](https://learn.microsoft.com/windows/wsl/) and follow the Linux steps inside it
 
 ## 2. Install and start
 
@@ -60,7 +61,7 @@ There is no login: anyone on your network who has the address can use the app. K
 
 ### Exercise demo GIFs
 
-Exercises work without them, but you can download short demo animations for the most common lifts:
+Exercises work without them, but you can download short demo animations for about 50 of the most common lifts (needs `python3`); the rest simply show no animation:
 
 ```bash
 python3 server/scripts/download-exercise-gifs.py
@@ -107,6 +108,18 @@ sqlite3 data/fitness.db ".backup backup-$(date +%F).db"
 Don't copy `fitness.db` on its own while the app is running — recent entries can still be sitting in the `fitness.db-wal` file next to it. Either use the command above or stop the app first (`pm2 stop ascent`) and copy the whole `data/` folder.
 
 To start over from scratch, stop the app, delete `data/`, and start it again.
+
+## Troubleshooting
+
+**The page doesn't load.** Run `pm2 list`. If `ascent` isn't `online`, run `pm2 logs ascent` to see why.
+
+**Port 3001 is already in use.** Change `PORT: 3001` in `ecosystem.config.js` to a free port, then run `pm2 delete ascent` and `./start.sh`. Use the new port in the address.
+
+**It works on the computer but not on the phone.** Both must be on the same Wi-Fi, and you need the *network* address, not `localhost`. If it still fails, allow incoming connections for Node in the computer's firewall.
+
+**`npm install` fails while building `better-sqlite3`.** Make sure you're on Node 20 (`node --version`). On Linux you may also need build tools: `sudo apt install build-essential python3`.
+
+**`pm2: command not found` in a new terminal.** Load nvm first (`source ~/.nvm/nvm.sh`), or run `npx pm2 …` from the project folder.
 
 ## Next
 
