@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== Fitness Tracker Setup ==="
+echo "=== Ascent Setup ==="
 
 # Install Node via nvm if not present
 if ! command -v node &>/dev/null; then
@@ -28,14 +28,11 @@ npm install
 echo ""
 echo "=== Setup complete! ==="
 echo ""
-echo "To run in DEVELOPMENT:"
+echo "To run it (builds the client, serves everything on one port with pm2):"
+echo "  ./start.sh"
+echo "  Open: http://localhost:3001"
+echo ""
+echo "To DEVELOP with hot reload instead:"
 echo "  Terminal 1: cd server && npm run dev"
 echo "  Terminal 2: cd client && npm run dev"
 echo "  Open: http://localhost:5173"
-echo ""
-echo "To run in PRODUCTION (pm2):"
-echo "  cd client && npm run build"
-echo "  cd .. && pm2 start ecosystem.config.js"
-echo "  Open: http://localhost:3000"
-echo ""
-echo "Split-screen (iPad): http://localhost:5173/?users=1,2"

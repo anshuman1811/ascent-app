@@ -1,30 +1,55 @@
-# FitTrack
+# Ascent
 
-A local fitness and meal tracking web app built for 2 household users. Runs entirely on your own machine — no cloud, no subscriptions, no data leaving your home network.
+A local fitness and meal tracker for one or two people in a household. It runs entirely on your own machine — no account, no cloud, no subscription, and nothing leaves your home network.
 
-![FitTrack Screenshot](docs/screenshot.png)
+![Ascent dashboard](docs/screenshots/dashboard.png)
+
+**New here?** Start with these:
+
+- **[Getting started](docs/getting-started.md)** — install it, create your profiles, open it on your phone
+- **[User guide](docs/guide.md)** — set up your library, routines and regimes, then log workouts and meals
 
 ## Features
 
-### Fitness Tracking
-- **Workout logging** — Start a workout from a saved routine or ad-hoc; log sets, reps, weight, or timed duration per exercise
-- **Personal Bests** — Automatically tracked per exercise; viewable in the Workout → PRs tab
-- **Workout history** — Full log of past sessions with calorie burn estimates (MET-based)
+### Training
+- **Live workout tracking** — start from a routine or ad-hoc; log sets, reps, weight or timed holds, with a rest timer that stays in sync across devices, a running calorie estimate, technique notes and a muscle map for each exercise
+- **Routines and regimes** — build routines from the exercise library, then chain them into a regime (e.g. Upper / Lower) so the app knows which one is up next
+- **Personal records** — one PR per exercise, flagged the moment you beat it
+- **Progress** — muscle-volume heatmap, estimated 1-rep-max trends, and an optional AI summary of your training
+- **Other activity** — log a walk, run or hike so it counts toward the day
 
-### Exercise Library
-- **110 pre-loaded exercises** across strength, cardio, warmup, and cooldown categories (squat rack, barbell, dumbbell, kettlebell, cable, bodyweight)
-- **Muscle activation maps** — Anatomical front+back SVG body diagrams (108 muscle regions, Apache 2.0 data from [vulovix/body-muscles](https://github.com/vulovix/body-muscles)) showing primary (red) and secondary (orange) muscles per exercise
-- **Routine builder** — Create workout routines with ordered exercises, sets/reps/weight/rest config, and an aggregate muscle coverage heatmap
+### Nutrition
+- **Food log** — meals by type with flexible portions, quick re-log from recent items, and optional AI parsing of a plain-English description ("two eggs and toast")
+- **Food library** — 100 starter foods with full nutrition-label fields; add your own, including recipes built from ingredients
+- **Daily dashboard** — calorie ring and macro bars against a target that adapts on workout days
 
-### Nutrition Tracking
-- **Food library** — Full nutrition label support: calories, protein, carbs, fat, fiber, sugar, saturated fat, cholesterol, sodium, potassium
-- **Meal logging** — Log meals by type (breakfast, lunch, dinner, snack, pre/post-workout) with flexible portion scaling
-- **Multi-image support** — Add multiple photos per food or meal (product image + nutrition label, etc.)
-- **Daily dashboard** — Calorie ring, macro breakdown, 7-day history chart, sodium warning (>2300mg), micronutrient callouts
+### Household
+- **One or two profiles** — independent logs, targets and routines; switch with one tap, or put both side by side on a tablet with split-screen
+- **Auto-calculated targets** — calorie target from your stats and goal (Mifflin-St Jeor), with the macros you choose to track
 
-### User Management
-- **2 user profiles** — Independent dashboards, logs, and routines per user; switch with one tap
-- **Calorie & macro targets** — Set per user in Settings; tracks protein, carbs, fat, fiber, sodium
+---
+
+## Quick Start
+
+You need macOS or Linux with [Node.js 20](https://nodejs.org) (the setup script installs it through [nvm](https://github.com/nvm-sh/nvm) if it's missing).
+
+```bash
+git clone https://github.com/anshuman1811/ascent-app.git
+cd ascent-app
+./setup.sh     # installs dependencies
+./start.sh     # builds the app and starts it in the background with pm2
+```
+
+Open **http://localhost:3001** and follow the welcome screen. `start.sh` also prints the address to use from a phone or tablet on the same Wi-Fi.
+
+The full walkthrough, including optional extras (exercise demo GIFs, AI features, starting on login, backups), is in **[Getting started](docs/getting-started.md)**.
+
+### Developing
+
+```bash
+cd server && npm run dev     # API on :3001, restarts on change
+cd client && npm run dev     # UI on :5173 with hot reload, proxies /api to :3001
+```
 
 ---
 
@@ -45,64 +70,10 @@ A local fitness and meal tracking web app built for 2 household users. Runs enti
 
 ---
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js 20 LTS (via [nvm](https://github.com/nvm-sh/nvm) recommended)
-- npm
-
-### Setup
-
-```bash
-# Clone the repo
-git clone https://github.com/anshuman1811/ascent-app.git
-cd ascent-app
-
-# Run the setup script (installs dependencies for both client and server)
-./setup.sh
-
-# Optional: fetch the exercise demo GIFs (not shipped in the repo — the source
-# dataset is licensed for non-commercial use only)
-python3 server/scripts/download-exercise-gifs.py
-
-# Start everything (server on :3001, client dev server on :5173)
-./start.sh
-```
-
-Then open [http://localhost:5173](http://localhost:5173) in your browser.
-
-### Manual Setup
-
-```bash
-# Install server dependencies
-cd server && npm install && cd ..
-
-# Install client dependencies
-cd client && npm install && cd ..
-
-# Start the backend (uses pm2 for persistence)
-export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh"
-npx pm2 start ecosystem.config.js
-
-# Start the client dev server
-cd client && npm run dev
-```
-
-### Production Build
-
-```bash
-cd client && npm run build
-# Built files go to client/dist/
-# The Express server can serve them from there if you update server/index.js to serve the dist folder
-```
-
----
-
 ## Project Structure
 
 ```
-fitness-tracker/
+ascent-app/
 ├── client/                    # React frontend
 │   ├── src/
 │   │   ├── api/               # Fetch client helpers
@@ -146,13 +117,14 @@ fitness-tracker/
 
 The SQLite database is auto-created at `data/fitness.db` on first run. Key tables:
 
-- `users` + `user_profiles` — 2 users with calorie/macro targets, unit preferences
+- `users` + `user_profiles` — the people created at onboarding, with calorie/macro targets and unit preferences
 - `foods` — Food library with full nutrition label fields
 - `meals` + `meal_items` — Daily meal logs with computed macros
 - `exercises` — Exercise library with muscle data (JSON arrays), category, MET value
 - `routines` + `routine_exercises` — Saved workout routines with ordered exercises
-- `workout_sessions` + `workout_sets` — Logged workouts with per-set data
-- `personal_bests` — Auto-maintained best lifts per exercise per user
+- `workout_sessions` + `session_exercises` + `set_logs` — Logged workouts with per-set data
+- `workout_regimes` + `regime_days` — A rotation of routines that decides which one is up next
+- `personal_bests` — Auto-maintained PR per exercise per user (heaviest weight for 4+ reps, then most reps at that weight)
 - `images` — Multi-image support for foods, meals, exercises (entity_type + entity_id pattern)
 
 Migrations use try/catch around `ALTER TABLE` statements for idempotent schema upgrades.
@@ -176,4 +148,5 @@ Supported muscle keys: `chest`, `shoulders`, `rear_delts`, `biceps`, `triceps`, 
 - The `data/` directory (database + uploaded images) is gitignored. Each install starts fresh.
 - The exercise library is seeded on first run (110 exercises). User-added exercises are never overwritten on restart.
 - Images are stored locally in `data/uploads/` and served at `/uploads/` by Express.
-- Both users share the same exercise/food library; workouts, meals, and routines are per-user.
+- Everyone shares the same exercise/food library; workouts, meals, and routines are per person.
+- There is no login. Ascent is meant for a trusted home network — don't expose it to the internet.

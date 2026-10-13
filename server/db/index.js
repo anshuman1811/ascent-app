@@ -279,6 +279,12 @@ const MIGRATIONS = [
   `ALTER TABLE workout_sessions ADD COLUMN rest_started_at TEXT`,
   `ALTER TABLE workout_sessions ADD COLUMN rest_target_seconds INTEGER`,
   `ALTER TABLE workout_sessions ADD COLUMN rest_session_exercise_id INTEGER`,
+  // Recovery routines and per-exercise coaching notes. These columns were first added to
+  // the original database by hand, so a fresh install never got them and couldn't list
+  // routines or start a workout from one.
+  `ALTER TABLE routines ADD COLUMN is_recovery INTEGER DEFAULT 0`,
+  `ALTER TABLE routine_exercises ADD COLUMN coaching_note TEXT`,
+  `ALTER TABLE session_exercises ADD COLUMN coaching_note TEXT`,
 ];
 for (const sql of MIGRATIONS) {
   try { db.exec(sql); } catch (_) {}

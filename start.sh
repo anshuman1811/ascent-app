@@ -1,5 +1,5 @@
 #!/bin/bash
-# FitTrack — build and start persistently with pm2
+# Ascent — build and start persistently with pm2
 set -e
 
 export NVM_DIR="$HOME/.nvm"
@@ -22,7 +22,7 @@ pm2 start ecosystem.config.js --update-env
 pm2 save
 
 echo ""
-echo "=== FitTrack is running ==="
+echo "=== Ascent is running ==="
 pm2 list
 echo ""
 echo "To set up auto-start on login, run:"
