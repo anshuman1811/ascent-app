@@ -5,8 +5,8 @@ This takes about five minutes. At the end you'll have Ascent running on your com
 ## 1. What you need
 
 - A Mac or Linux computer that stays on when you want to use the app (it is the server)
-- [Node.js 20](https://nodejs.org). If you don't have Node, `setup.sh` installs it through [nvm](https://github.com/nvm-sh/nvm)
-- `git`
+- [Node.js](https://nodejs.org) 20, 22 or 24. If you don't have one of those, `setup.sh` installs Node 24 for you through [nvm](https://github.com/nvm-sh/nvm) — no need to install it first
+- `git`. On a Mac that doesn't have it yet, typing `git` in Terminal offers to install Apple's Command Line Tools; accept and wait for it to finish
 - Windows isn't supported directly; use [WSL](https://learn.microsoft.com/windows/wsl/) and follow the Linux steps inside it
 
 ## 2. Install and start
@@ -109,6 +109,14 @@ Don't copy `fitness.db` on its own while the app is running — recent entries c
 
 To start over from scratch, stop the app, delete `data/`, and start it again.
 
+### Uninstalling
+
+```bash
+pm2 delete ascent && pm2 save
+```
+
+Then delete the `ascent-app` folder. That removes your data too, so back it up first if you want to keep it.
+
 ## Troubleshooting
 
 **The page doesn't load.** Run `pm2 list`. If `ascent` isn't `online`, run `pm2 logs ascent` to see why.
@@ -117,7 +125,9 @@ To start over from scratch, stop the app, delete `data/`, and start it again.
 
 **It works on the computer but not on the phone.** Both must be on the same Wi-Fi, and you need the *network* address, not `localhost`. If it still fails, allow incoming connections for Node in the computer's firewall.
 
-**`npm install` fails while building `better-sqlite3`.** Make sure you're on Node 20 (`node --version`). On Linux you may also need build tools: `sudo apt install build-essential python3`.
+**`npm install` fails while building `better-sqlite3`.** Check `node --version` is 20, 22 or 24 — those download a ready-made build; other versions try to compile it and usually fail. On Linux you may also need build tools: `sudo apt install build-essential python3`.
+
+**`node: command not found` after setup.** nvm only takes effect in new terminal windows — open a new one, or run `source ~/.nvm/nvm.sh`.
 
 **`pm2: command not found` in a new terminal.** Load nvm first (`source ~/.nvm/nvm.sh`), or run `npx pm2 …` from the project folder.
 

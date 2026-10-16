@@ -31,7 +31,7 @@ A local fitness and meal tracker for one or two people in a household. It runs e
 
 ## Quick Start
 
-You need macOS or Linux with [Node.js 20](https://nodejs.org) (the setup script installs it through [nvm](https://github.com/nvm-sh/nvm) if it's missing).
+You need macOS or Linux, `git`, and [Node.js](https://nodejs.org) 20, 22 or 24 — if you don't have a supported Node, the setup script installs Node 24 through [nvm](https://github.com/nvm-sh/nvm).
 
 ```bash
 git clone https://github.com/anshuman1811/ascent-app.git
