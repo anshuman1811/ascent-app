@@ -18,26 +18,30 @@ node_supported || { echo "Error: Node 20, 22 or 24 not found — run ./setup.sh 
 
 echo "=== Building client ==="
 cd "$ROOT/client"
-npm run build
+rm -rf dist
+npm run build --silent 2>&1 | grep -E "built in|error" || true
+[ -f dist/index.html ] || { echo "Error: client build failed — run 'cd client && npm run build' to see why."; exit 1; }
 
 echo "=== Starting server with pm2 ==="
 cd "$ROOT"
 
 # Install pm2 globally if needed
-command -v pm2 &>/dev/null || npm install -g pm2
+command -v pm2 &>/dev/null || npm install -g pm2 --silent
 
 # Delete and re-add so a changed Node version or config always takes effect
 pm2 delete ascent &>/dev/null || true
-pm2 start ecosystem.config.js
-pm2 save
+pm2 start ecosystem.config.js >/dev/null
+pm2 save >/dev/null
+sleep 2
+pm2 jlist | node -e "
+const a = JSON.parse(require('fs').readFileSync(0, 'utf8')).find(p => p.name === 'ascent');
+if (!a || a.pm2_env.status !== 'online') { console.log('Error: Ascent did not start — run: pm2 logs ascent'); process.exit(1); }
+"
 
 echo ""
 echo "=== Ascent is running ==="
-pm2 list
 echo ""
-echo "To set up auto-start on login, run:"
-echo "  pm2 startup"
-echo "  (copy and run the command it prints)"
+echo "To start it automatically after a reboot, run 'pm2 startup' once and follow its instructions."
 echo ""
 PORT=$(node -p "require('./ecosystem.config.js').apps[0].env.PORT")
 echo "Access on this machine:  http://localhost:$PORT"

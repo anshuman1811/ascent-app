@@ -30,12 +30,12 @@ echo "Node: $(node --version), npm: $(npm --version)"
 # Backend deps
 echo "Installing server dependencies..."
 cd server
-npm install
+npm ci --no-fund --no-audit --loglevel=error   # exact versions from the lockfile
 
 # Frontend deps
 echo "Installing client dependencies..."
 cd ../client
-npm install
+npm ci --no-fund --no-audit --loglevel=error   # exact versions from the lockfile
 
 echo ""
 echo "=== Setup complete! ==="

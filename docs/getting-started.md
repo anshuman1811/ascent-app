@@ -2,6 +2,15 @@
 
 This takes about five minutes. At the end you'll have Ascent running on your computer, a profile for each person, and the app open on your phone.
 
+```mermaid
+flowchart LR
+  A["<b>1. Clone</b><br/>git clone …<br/>cd ascent-app"] --> B["<b>2. Install</b><br/>./setup.sh"]
+  B --> C["<b>3. Start</b><br/>./start.sh"]
+  C --> D["<b>4. Open</b><br/>localhost:3001"]
+  D --> E["<b>5. Create profiles</b><br/>welcome screen"]
+  E --> F["<b>6. Add your phone</b><br/>network address"]
+```
+
 ## 1. What you need
 
 - A Mac or Linux computer that stays on when you want to use the app (it is the server)
@@ -18,15 +27,16 @@ cd ascent-app
 ./start.sh
 ```
 
-- `setup.sh` installs the dependencies for the server and the client.
-- `start.sh` builds the client and starts the server in the background with [pm2](https://pm2.keymetrics.io), so it keeps running after you close the terminal.
+**`setup.sh`** checks for a supported Node (installing Node 24 if needed) and installs the dependencies for the server and the client. It takes a minute or two:
 
-When it finishes it prints where to open the app:
+![Running setup.sh](illustrations/terminal-setup.png)
 
-```
-Access on this machine:  http://localhost:3001
-Access on network:       http://192.168.x.x:3001
-```
+**`start.sh`** builds the app and starts it in the background with [pm2](https://pm2.keymetrics.io), so it keeps running after you close the terminal. It ends by printing where to open the app:
+
+![Running start.sh](illustrations/terminal-start.png)
+
+- **Access on this machine** — open this in a browser on the computer you just set up.
+- **Access on network** — open this on phones and tablets. If you see more than one, use the one that starts with `192.168.` or `10.`; the others usually belong to VPNs or virtual machines.
 
 ## 3. Create your profiles
 

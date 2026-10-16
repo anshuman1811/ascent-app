@@ -4,10 +4,29 @@ A local fitness and meal tracker for one or two people in a household. It runs e
 
 ![Ascent dashboard](docs/screenshots/dashboard.png)
 
-**New here?** Start with these:
+| | |
+|---|---|
+| **[Getting started](docs/getting-started.md)** | Install it, create your profiles, open it on your phone — about five minutes |
+| **[User guide](docs/guide.md)** | Set up your library, routines and regimes, then log workouts and meals |
 
-- **[Getting started](docs/getting-started.md)** — install it, create your profiles, open it on your phone
-- **[User guide](docs/guide.md)** — set up your library, routines and regimes, then log workouts and meals
+## How it works
+
+One laptop (or any always-on Mac or Linux machine) runs Ascent and keeps all the data. Everyone else in the house opens it in a browser on the same Wi-Fi — no app store, no account.
+
+```mermaid
+flowchart LR
+  subgraph home["Your home Wi-Fi"]
+    direction LR
+    browser["Browser on the laptop<br/>localhost:3001"]
+    phone["Phone<br/>192.168.x.x:3001"]
+    tablet["Tablet, both people side by side<br/>192.168.x.x:3001/?users=1,2"]
+    laptop[("Laptop running Ascent<br/>app + database in data/")]
+  end
+  browser --> laptop
+  phone --> laptop
+  tablet --> laptop
+  laptop -. "optional AI features,<br/>with your own API key" .-> api["Anthropic API"]
+```
 
 ## Features
 
@@ -31,6 +50,15 @@ A local fitness and meal tracker for one or two people in a household. It runs e
 
 ## Quick Start
 
+```mermaid
+flowchart LR
+  A["<b>1. Clone</b><br/>git clone …<br/>cd ascent-app"] --> B["<b>2. Install</b><br/>./setup.sh"]
+  B --> C["<b>3. Start</b><br/>./start.sh"]
+  C --> D["<b>4. Open</b><br/>localhost:3001"]
+  D --> E["<b>5. Create profiles</b><br/>welcome screen"]
+  E --> F["<b>6. Add your phone</b><br/>network address"]
+```
+
 You need macOS or Linux, `git`, and [Node.js](https://nodejs.org) 20, 22 or 24 — if you don't have a supported Node, the setup script installs Node 24 through [nvm](https://github.com/nvm-sh/nvm).
 
 ```bash
@@ -40,7 +68,42 @@ cd ascent-app
 ./start.sh     # builds the app and starts it in the background with pm2
 ```
 
-Open **http://localhost:3001** and follow the welcome screen. `start.sh` also prints the address to use from a phone or tablet on the same Wi-Fi.
+What you'll see — first the install:
+
+![Running setup.sh](docs/illustrations/terminal-setup.png)
+
+then the start script, which ends with the addresses to open:
+
+![Running start.sh](docs/illustrations/terminal-start.png)
+
+Open **http://localhost:3001** and follow the welcome screen. Use the **network** address on your phone or tablet.
+
+### After that
+
+```mermaid
+flowchart TD
+  subgraph once["Set up once"]
+    T["<b>Check your targets</b><br/>Profile → Targets"] --> L["<b>Review the library</b><br/>Library → Foods, Exercises"]
+    L --> R["<b>Build routines</b><br/>Library → Routines"]
+    R --> G["<b>Group them into a regime</b><br/>Workout → Regimes"]
+  end
+  subgraph daily["Every day"]
+    M["<b>Log meals</b><br/>Food Log"]
+    W["<b>Train</b><br/>Workout → Start"]
+    D["<b>See the day</b><br/>Dashboard"]
+  end
+  subgraph weekly["Every week or two"]
+    P["<b>Review progress</b><br/>Progress"]
+    B["<b>Back up</b><br/>data/"]
+  end
+  G --> W
+  M --> D
+  W --> D
+  D --> P
+  P --> B
+```
+
+Each step is explained, with screenshots, in the **[user guide](docs/guide.md)**.
 
 The full walkthrough, including optional extras (exercise demo GIFs, AI features, starting on login, backups), is in **[Getting started](docs/getting-started.md)**.
 
