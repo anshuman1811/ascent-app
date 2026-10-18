@@ -12,6 +12,7 @@ import Select from '../../components/ui/Select';
 import Modal from '../../components/ui/Modal';
 import ExerciseAnimation from '../../components/ui/ExerciseAnimation';
 import MuscleMap, { MuscleMapLegend } from '../../components/ui/MuscleMap';
+import { useKeepAwake } from '../../native/hooks';
 
 interface OutletCtx { userId: number; }
 
@@ -92,6 +93,7 @@ export default function LiveWorkout({ userId: propUserId, sessionIdOverride, onE
   const sessionId = sessionIdOverride ?? Number(paramId);
   const navigate = useNavigate();
   const exit = onExit ?? (() => navigate('/workout'));
+  useKeepAwake(); // Android app: screen stays on during a live workout
   // In split-screen pair mode this is squeezed into a fixed-size rotated pane —
   // it must fill that pane's height rather than the natural device viewport.
   const rootHeightClass = sessionIdOverride ? 'min-h-full' : 'min-h-screen';
@@ -286,14 +288,17 @@ export default function LiveWorkout({ userId: propUserId, sessionIdOverride, onE
       : elapsed;
     const exercisesCompleted = completedData.exercises?.filter(e => e.status === 'completed').length ?? 0;
     const setCount = completedData.exercises?.reduce((n, ex) => n + ex.sets.length, 0) ?? 0;
+    // Show volume in the unit most sets were logged in (lb for someone who lifts in lb).
+    const loggedUnits = completedData.exercises?.flatMap(ex => ex.sets.filter(s => s.actual_weight_value).map(s => s.actual_weight_unit)) ?? [];
+    const volumeUnit = loggedUnits.filter(u => u === 'lb').length > loggedUnits.length / 2 ? 'lb' : 'kg';
     const totalVolume = Math.round(
-      completedData.exercises?.reduce((vol, ex) => {
+      (completedData.exercises?.reduce((vol, ex) => {
         if (ex.exercise_type !== 'reps') return vol;
         return vol + ex.sets.reduce((sv, s) => {
           const kg = (s.actual_weight_unit === 'kg' ? 1 : 0.453592) * (s.actual_weight_value ?? 0);
           return sv + (s.actual_reps ?? 0) * kg;
         }, 0);
-      }, 0) ?? 0
+      }, 0) ?? 0) / (volumeUnit === 'lb' ? 0.453592 : 1)
     );
     const estimatedCals = completedData.calories_burned;
     const overrideVal = caloriesOverride === '' ? null : Number(caloriesOverride);
@@ -320,7 +325,7 @@ export default function LiveWorkout({ userId: propUserId, sessionIdOverride, onE
           {totalVolume > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Volume lifted</span>
-              <span className="text-white font-medium">{totalVolume.toLocaleString()} kg</span>
+              <span className="text-white font-medium">{totalVolume.toLocaleString()} {volumeUnit}</span>
             </div>
           )}
           <div className="flex justify-between items-center text-sm">
@@ -833,6 +838,14 @@ function ExerciseCard({ sessionId, ex, completedSets, prevSet, history, sessionR
   }, [sessionRestStartedAt, sessionRestTargetSeconds, sessionRestSessionExerciseId, ex.id]);
 
   const isTimed = ex.exercise_type === 'timed';
+  // Bodyweight-only moves (Hollow Rock, Dead Bug…) have no weight field at all;
+  // bodyweight_plus moves (Pull-Up, Dip…) take an optional added weight.
+  const isBodyweight = ex.load_type === 'bodyweight';
+  const isBodyweightPlus = ex.load_type === 'bodyweight_plus';
+  const formatRepSet = (reps: number | null | undefined, w: number | null | undefined, unit: string) =>
+    !isBodyweight && w && w > 0
+      ? `${reps} × ${w}${unit}`
+      : (isBodyweight || isBodyweightPlus) ? `${reps} reps` : `${reps} × ${w ?? 0}${unit}`;
   const isDone = ex.status === 'completed' || ex.status === 'skipped';
 
   // Reset phase to active when an exercise is re-opened after completion (Add Extra Set flow).
@@ -865,7 +878,7 @@ function ExerciseCard({ sessionId, ex, completedSets, prevSet, history, sessionR
     onUpdateSet(set.id, {
       reps: isTimed ? undefined : (parseInt(editReps) || undefined),
       duration: isTimed ? (parseFloat(editDuration) || undefined) : undefined,
-      weight: editWeight ? parseFloat(editWeight) : undefined,
+      weight: !isBodyweight && editWeight ? parseFloat(editWeight) : undefined,
       weightUnit: editWeightUnit,
       isAssisted: editIsAssisted,
     });
@@ -923,7 +936,9 @@ function ExerciseCard({ sessionId, ex, completedSets, prevSet, history, sessionR
             <span className="text-indigo-400 font-semibold">{completedSets}/{ex.target_sets} sets done</span>
             {isTimed
               ? <span className="text-gray-400">Target: {ex.target_duration_seconds}s</span>
-              : <span className="text-gray-400">Target: {ex.target_reps} reps @ {ex.target_weight_value || '—'}{ex.target_weight_unit}</span>}
+              : isBodyweight || (isBodyweightPlus && !ex.target_weight_value)
+              ? <span className="text-gray-400">Target: {ex.target_reps} reps</span>
+              : <span className="text-gray-400">Target: {ex.target_reps} reps @ {isBodyweightPlus ? '+' : ''}{ex.target_weight_value || '—'}{ex.target_weight_unit}</span>}
           </div>
           <button
             onClick={onAddSet}
@@ -956,7 +971,7 @@ function ExerciseCard({ sessionId, ex, completedSets, prevSet, history, sessionR
                       {lastSets.map((s, i) => (
                         <span key={i} className="inline-flex items-center gap-0.5">
                           {i > 0 && <span className="text-gray-700 mx-0.5">·</span>}
-                          {isTimed ? `${s.actual_duration_seconds}s` : (s.actual_weight_value && s.actual_weight_value > 0 ? `${s.actual_reps}×${s.actual_weight_value}${s.actual_weight_unit}` : `${s.actual_reps} reps`)}
+                          {isTimed ? `${s.actual_duration_seconds}s` : (!isBodyweight && s.actual_weight_value && s.actual_weight_value > 0 ? `${s.actual_reps}×${s.actual_weight_value}${s.actual_weight_unit}` : `${s.actual_reps} reps`)}
                           {!!s.is_assisted && <span className="text-orange-400 text-[9px] font-bold ml-0.5" title="Assisted / not clean">A</span>}
                         </span>
                       ))}
@@ -1004,9 +1019,13 @@ function ExerciseCard({ sessionId, ex, completedSets, prevSet, history, sessionR
                   ) : (
                     <>
                       <Input type="number" value={editReps} onChange={e => setEditReps(e.target.value)} placeholder="Reps" className="w-16" />
-                      <Input type="number" value={editWeight} onChange={e => setEditWeight(e.target.value)} placeholder="Wt" className="w-16" />
-                      <Select value={editWeightUnit} onChange={e => setEditWeightUnit(e.target.value)}
-                        options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} className="w-16" />
+                      {!isBodyweight && (
+                        <>
+                          <Input type="number" value={editWeight} onChange={e => setEditWeight(e.target.value)} placeholder={isBodyweightPlus ? '+Wt' : 'Wt'} className="w-16" />
+                          <Select value={editWeightUnit} onChange={e => setEditWeightUnit(e.target.value)}
+                            options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} className="w-16" />
+                        </>
+                      )}
                     </>
                   )}
                   <button
@@ -1038,7 +1057,7 @@ function ExerciseCard({ sessionId, ex, completedSets, prevSet, history, sessionR
                     <span className="text-sm text-white font-medium">
                       {isTimed
                         ? `${set.actual_duration_seconds}s`
-                        : `${set.actual_reps} × ${set.actual_weight_value ?? 0}${set.actual_weight_unit}`}
+                        : formatRepSet(set.actual_reps, set.actual_weight_value, set.actual_weight_unit)}
                     </span>
                     {!!set.is_assisted && (
                       <span className="text-[10px] font-bold text-orange-400 px-1 py-0.5 rounded bg-orange-900/30" title="Assisted / not clean">
@@ -1116,7 +1135,7 @@ function ExerciseCard({ sessionId, ex, completedSets, prevSet, history, sessionR
             <p className="text-xs text-gray-600">
               Last: {isTimed
                 ? `${prevSet.actual_duration_seconds}s`
-                : `${prevSet.actual_reps} × ${prevSet.actual_weight_value ?? 0}${prevSet.actual_weight_unit}`}
+                : formatRepSet(prevSet.actual_reps, prevSet.actual_weight_value, prevSet.actual_weight_unit)}
             </p>
           )}
 
@@ -1169,12 +1188,17 @@ function ExerciseCard({ sessionId, ex, completedSets, prevSet, history, sessionR
               </div>
             );
           })() : (
-            <div className="grid grid-cols-3 gap-2">
+            isBodyweight ? (
               <Input label="Reps" type="number" value={reps} onChange={e => setReps(e.target.value)} />
-              <Input label="Weight" type="number" value={weight} onChange={e => setWeight(e.target.value)} />
-              <Select label="Unit" value={weightUnit} onChange={e => setWeightUnit(e.target.value)}
-                options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
-            </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                <Input label="Reps" type="number" value={reps} onChange={e => setReps(e.target.value)} />
+                <Input label={isBodyweightPlus ? 'Added weight' : 'Weight'} type="number" value={weight}
+                  placeholder={isBodyweightPlus ? 'optional' : undefined} onChange={e => setWeight(e.target.value)} />
+                <Select label="Unit" value={weightUnit} onChange={e => setWeightUnit(e.target.value)}
+                  options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
+              </div>
+            )
           )}
 
           <div className="flex items-center justify-between">
@@ -1204,7 +1228,7 @@ function ExerciseCard({ sessionId, ex, completedSets, prevSet, history, sessionR
               onLogSet({
                 reps: isTimed ? undefined : (parseInt(reps) || undefined),
                 duration: isTimed ? (parseFloat(duration) || undefined) : undefined,
-                weight: weight ? parseFloat(weight) : undefined,
+                weight: !isBodyweight && weight ? parseFloat(weight) : undefined,
                 weightUnit,
                 restSeconds: restSecs,
                 isAssisted: assisted,

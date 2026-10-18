@@ -1,12 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink, Database, Users, Monitor } from 'lucide-react';
+import { useState } from 'react';
+import { ExternalLink, Database, Users, Monitor, Server } from 'lucide-react';
 import { api } from '../api/client';
 import { useAppStore } from '../store/appStore';
 import type { User } from '../types';
+import { getServerBase } from '../api/serverUrl';
+import { isNative } from '../native/platform';
+import ServerAddressForm from '../native/ServerAddressForm';
 
 export default function Settings() {
   const navigate = useNavigate();
+  const native = isNative();
   const { activeUserId, setActiveUserId } = useAppStore();
   const { data: users = [] } = useQuery({
     queryKey: ['users'],
@@ -16,6 +21,10 @@ export default function Settings() {
   return (
     <div className="space-y-5">
       <h1 className="text-xl font-bold text-white">Settings</h1>
+
+      {/* Server address — Android app only. In the browser the page is served by the
+          Ascent server itself, so the address is simply the one in the address bar. */}
+      {native && <ServerAddressCard />}
 
       {/* Per-user settings */}
       <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4 space-y-2">
@@ -55,7 +64,8 @@ export default function Settings() {
         {users.length === 2 && (
           <a
             href={`/?users=${users[0].id},${users[1].id}`}
-            target="_blank"
+            // In the Android app there is no second browser tab to open, so stay in the app.
+            target={native ? undefined : '_blank'}
             rel="noopener noreferrer"
             className="flex items-center gap-2 text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
           >
@@ -77,8 +87,45 @@ export default function Settings() {
       </div>
 
       <div className="text-center text-xs text-gray-700 pt-4">
-        Ascent · Local build · Running on {window.location.host}
+        Ascent · Local build · {native ? `Connected to ${getServerBase().replace(/^https?:\/\//, '')}` : `Running on ${window.location.host}`}
       </div>
+    </div>
+  );
+}
+
+function ServerAddressCard() {
+  const [editing, setEditing] = useState(false);
+  const current = getServerBase();
+
+  return (
+    <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4 space-y-3">
+      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide flex items-center gap-1.5">
+        <Server size={12} /> Server Address
+      </p>
+      {editing ? (
+        <>
+          <ServerAddressForm
+            initial={current}
+            submitLabel="Test and save"
+            // Restart the app on the new server so nothing cached from the old one lingers.
+            onSaved={() => window.location.replace('/')}
+          />
+          <button onClick={() => setEditing(false)} className="text-xs text-gray-500 hover:text-white">
+            Cancel
+          </button>
+        </>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <code className="text-sm text-gray-300 truncate">{current}</code>
+          <button
+            onClick={() => setEditing(true)}
+            className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:text-white shrink-0"
+          >
+            Change
+          </button>
+        </div>
+      )}
+      <p className="text-xs text-gray-600">The computer running Ascent on your home network.</p>
     </div>
   );
 }

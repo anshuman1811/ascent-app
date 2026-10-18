@@ -12,19 +12,20 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors({ origin: '*' }));
-app.use(express.json());
+// Generous limit: offline devices push their queued changes in batches.
+app.use(express.json({ limit: '10mb' }));
 
-app.use('/api/users',     require('./routes/users'));
-app.use('/api/foods',     require('./routes/foods'));
-app.use('/api/meals',     require('./routes/meals'));
-app.use('/api/exercises', require('./routes/exercises'));
-app.use('/api/routines',  require('./routes/routines'));
-app.use('/api/regimes',   require('./routes/regimes'));
-app.use('/api/workouts',  require('./routes/workouts'));
-app.use('/api/dashboard', require('./routes/dashboard'));
-app.use('/api/images',    require('./routes/images'));
-app.use('/api/ai',        require('./routes/ai'));
-app.use('/api/bug-reports', require('./routes/bug-reports'));
+// Offline sync: tags direct writes (op id + device) so a lost response can't double-apply,
+// and serves the change feed / snapshot / push endpoints. See routes/sync.js.
+const sync = require('./routes/sync');
+app.use('/api', sync.middleware);
+app.use('/api/sync', sync);
+
+// /api/users, /api/meals, … — the list lives in routes/mounts.js (shared with sync replay
+// and the client's offline build).
+for (const m of require('./routes/mounts')) {
+  app.use('/api' + m.path, require('./routes/' + m.module));
+}
 
 // Serve uploaded images
 const uploadsDir = path.join(__dirname, '../data/uploads');

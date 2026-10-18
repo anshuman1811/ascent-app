@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the web app's page background (Tailwind gray-950). -->
+    <color name="ascent_background">#030712</color>
+    <color name="colorPrimary">#030712</color>
+    <color name="colorPrimaryDark">#030712</color>
+    <color name="colorAccent">#6366F1</color>
+</resources>

@@ -1,31 +1,14 @@
-const BASE = '/api';
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
-    ...init,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || 'Request failed');
-  }
-  return res.json();
-}
-
-async function uploadFiles<T>(path: string, formData: FormData): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { method: 'POST', body: formData });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || 'Upload failed');
-  }
-  return res.json();
-}
+// All API traffic goes through here. Online with nothing waiting to sync, requests go
+// straight to the server as they always have. Offline (or while queued changes are still
+// being pushed) they are answered by the device's local replica, running the server's own
+// route handlers — see client/src/offline/engine.ts.
+import { request, upload } from '../offline/engine';
 
 export const api = {
-  get:    <T>(path: string)                   => request<T>(path),
-  post:   <T>(path: string, body: unknown)    => request<T>(path, { method: 'POST',   body: JSON.stringify(body) }),
-  put:    <T>(path: string, body: unknown)    => request<T>(path, { method: 'PUT',    body: JSON.stringify(body) }),
-  patch:  <T>(path: string, body: unknown)    => request<T>(path, { method: 'PATCH',  body: JSON.stringify(body) }),
-  delete: <T>(path: string)                   => request<T>(path, { method: 'DELETE' }),
-  upload: <T>(path: string, fd: FormData)     => uploadFiles<T>(path, fd),
+  get:    <T>(path: string)                   => request<T>('GET', path),
+  post:   <T>(path: string, body: unknown)    => request<T>('POST', path, body),
+  put:    <T>(path: string, body: unknown)    => request<T>('PUT', path, body),
+  patch:  <T>(path: string, body: unknown)    => request<T>('PATCH', path, body),
+  delete: <T>(path: string)                   => request<T>('DELETE', path),
+  upload: <T>(path: string, fd: FormData)     => upload<T>(path, fd),
 };

@@ -43,14 +43,15 @@ export default function BugReportButton() {
 
   return (
     <>
-      {/* Floating trigger button */}
+      {/* Floating trigger button — icon-only on phones so it doesn't cover content */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-24 right-4 z-50 lg:bottom-6 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-800 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 text-xs font-medium transition-colors shadow-lg"
+        className="fixed bottom-24 right-4 z-50 lg:bottom-6 flex items-center gap-1.5 p-2 lg:px-3 lg:py-1.5 rounded-full bg-gray-800/90 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 text-xs font-medium transition-colors shadow-lg"
         title="Report a bug or suggestion"
+        aria-label="Feedback"
       >
-        <Bug size={13} />
-        Feedback
+        <Bug size={14} />
+        <span className="hidden lg:inline">Feedback</span>
       </button>
 
       {/* Popup */}
@@ -67,6 +68,7 @@ export default function BugReportButton() {
                 <h3 className="text-sm font-semibold text-white">Report Feedback</h3>
               </div>
               <button
+                data-back-close
                 onClick={() => !submit.isPending && setOpen(false)}
                 className="p-1 text-gray-500 hover:text-white transition-colors"
               >

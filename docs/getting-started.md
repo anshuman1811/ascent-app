@@ -42,23 +42,27 @@ cd ascent-app
 
 Open http://localhost:3001. A new install has no data, so you land on the welcome screen.
 
-![Welcome screen](screenshots/onboarding-welcome.png)
+![Welcome screen](screenshots/onboarding-welcome.jpg)
 
 Fill in your details. Check the **units** next to height and weight before you type — they default to feet and pounds. Ascent uses these numbers to work out your daily calorie target, and you can change any of them later under **Profile**.
 
-![Profile form](screenshots/onboarding-profile.png)
+![Profile form](screenshots/onboarding-profile.jpg)
 
 Next, choose **Just me** or **Add someone** to create a second profile for a partner or housemate.
 
-![Add a second person](screenshots/onboarding-add-person.png)
+![Add a second person](screenshots/onboarding-add-person.jpg)
 
 You then arrive at an empty dashboard, ready for your first meal or workout.
 
-![Empty dashboard](screenshots/dashboard-empty.png)
+![Empty dashboard](screenshots/dashboard-empty.jpg)
 
 ## 4. Open it on your phone or tablet
 
 On any device on the same Wi-Fi, open the **network** address `start.sh` printed (for example `http://192.168.1.20:3001`). Add it to your home screen to use it like an app.
+
+| Dashboard | Food log | Live workout |
+|---|---|---|
+| ![Dashboard on a phone](screenshots/phone-dashboard.jpg) | ![Food log on a phone](screenshots/phone-food-log.jpg) | ![Live workout on a phone](screenshots/phone-live-workout.jpg) |
 
 Everyone sees the same data, live. Two useful variations:
 
@@ -71,14 +75,14 @@ There is no login: anyone on your network who has the address can use the app. K
 
 ### Exercise demo GIFs
 
-Exercises work without them, but you can download short demo animations for about 50 of the most common lifts (needs `python3`); the rest simply show no animation:
+Exercises work without them, but you can download short demo animations for about 100 exercises (needs `python3`); a few dozen more already ship with a two-photo illustration, and the rest simply show none:
 
 ```bash
 python3 server/scripts/download-exercise-gifs.py
 ./start.sh
 ```
 
-They aren't included in this repository because the source dataset is licensed for non-commercial use only.
+They aren't included in this repository because the animations belong to Gym visual (https://gymvisual.com/), whose terms don't allow them to be redistributed here; the app credits them under each animation.
 
 ### AI features
 
@@ -143,4 +147,4 @@ Then delete the `ascent-app` folder. That removes your data too, so back it up f
 
 ## Next
 
-Head to the **[user guide](guide.md)** to set up your routines and start logging.
+Head to the **[user guide](guide.md)** — it walks through every screen, step by step, starting with setting up your routines.

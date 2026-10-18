@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from './api/client';
 import { useAppStore } from './store/appStore';
 import type { User } from './types';
@@ -20,6 +20,11 @@ import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import BugTracker from './pages/BugTracker';
 import Onboarding from './pages/Onboarding';
+import SyncStatus from './offline/SyncStatus';
+import { getServerBase } from './api/serverUrl';
+import { isNative } from './native/platform';
+import { useAndroidBackButton } from './native/hooks';
+import ConnectServer from './native/ConnectServer';
 
 function AppRoutes({ userId }: { userId?: number }) {
   return (
@@ -48,6 +53,7 @@ function AppRoutes({ userId }: { userId?: number }) {
 function AppInner() {
   const { setUsers } = useAppStore();
   const navigate = useNavigate();
+  useAndroidBackButton();
   const [searchParams] = useSearchParams();
   const splitParam = searchParams.get('users');
   const splitUserIds = splitParam ? splitParam.split(',').map(Number).filter(Boolean) : null;
@@ -113,10 +119,16 @@ function AppInner() {
 }
 
 export default function App() {
+  // Android app: the server address isn't known until the user enters it, so nothing
+  // talks to the API before then. In the browser the base is always same-origin.
+  const [hasServer, setHasServer] = useState(() => !isNative() || !!getServerBase());
+  if (!hasServer) return <ConnectServer onConnected={() => setHasServer(true)} />;
+
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ToastProvider>
         <AppInner />
+        <SyncStatus />
       </ToastProvider>
     </BrowserRouter>
   );

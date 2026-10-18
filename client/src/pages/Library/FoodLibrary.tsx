@@ -9,6 +9,7 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Modal from '../../components/ui/Modal';
 import ImageGallery from '../../components/ui/ImageGallery';
+import ServerImage from '../../components/ui/ServerImage';
 
 const UNIT_OPTIONS = [
   { value: 'g',       label: 'g (grams)' },
@@ -103,7 +104,7 @@ function FoodCard({ food, onEdit, onDelete }: { food: Food; onEdit: () => void; 
   return (
     <div className="bg-gray-900 rounded-xl border border-gray-800 p-3.5 flex items-center gap-3">
       {thumb ? (
-        <img src={thumb.url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+        <ServerImage src={thumb.url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
       ) : (
         <div className="w-12 h-12 rounded-lg bg-gray-800 flex items-center justify-center shrink-0">
           <Image size={18} className="text-gray-600" />

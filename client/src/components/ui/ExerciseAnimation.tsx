@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ServerImage from './ServerImage';
 
 interface Props {
   gifUrl: string;
@@ -19,13 +20,24 @@ export default function ExerciseAnimation({ gifUrl, name, className = '' }: Prop
   const isTwoFrame = frame1 !== frame0;
 
   if (!isTwoFrame) {
-    return (
-      <img
+    // The bundled GIFs come from Gym visual, whose permission requires this credit.
+    const isGymVisual = /^\/exercises\/[^/]+\.gif$/.test(gifUrl);
+    const img = (
+      <ServerImage
         src={gifUrl}
         alt={name}
         className={`object-contain ${className}`}
-        onError={() => setErrored(true)}
+        onAllFailed={() => setErrored(true)}
       />
+    );
+    if (!isGymVisual) return img;
+    return (
+      <figure className="relative">
+        {img}
+        <figcaption className="absolute bottom-0 right-1 text-[8px] leading-tight text-gray-500/80 pointer-events-none">
+          © Gym visual — gymvisual.com
+        </figcaption>
+      </figure>
     );
   }
 
@@ -34,20 +46,20 @@ export default function ExerciseAnimation({ gifUrl, name, className = '' }: Prop
       className={`relative overflow-hidden ${className}`}
       style={{ aspectRatio: '4/3' }}
     >
-      <img
+      <ServerImage
         src={frame0}
         alt={name}
         className="absolute inset-0 w-full h-full object-contain"
         style={{ animation: 'exanim-f0 1.4s steps(1, end) infinite' }}
-        onError={() => setErrored(true)}
+        onAllFailed={() => setErrored(true)}
       />
-      <img
+      <ServerImage
         src={frame1}
         alt=""
         aria-hidden
         className="absolute inset-0 w-full h-full object-contain"
         style={{ animation: 'exanim-f1 1.4s steps(1, end) infinite' }}
-        onError={() => setErrored(true)}
+        onAllFailed={() => setErrored(true)}
       />
       <style>{`
         @keyframes exanim-f0 {

@@ -10,6 +10,7 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Modal from '../../components/ui/Modal';
 import MuscleMap, { MuscleMapLegend } from '../../components/ui/MuscleMap';
+import ServerImage from '../../components/ui/ServerImage';
 
 interface OutletCtx { userId: number; }
 
@@ -301,7 +302,7 @@ export default function RoutineBuilder({ userId: propUserId }: { userId?: number
                       <div className="px-4 pb-4 space-y-3 bg-gray-950/40">
                         {re.gif_url && (
                           <div className="flex justify-center pt-2">
-                            <img
+                            <ServerImage
                               src={re.gif_url}
                               alt={re.exercise_name}
                               className="h-28 w-auto rounded-xl object-contain"

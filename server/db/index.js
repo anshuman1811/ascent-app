@@ -344,25 +344,83 @@ for (const sql of MIGRATIONS) {
 // Uses INSERT OR IGNORE so user-added exercises are never touched.
 // Always updates category on existing rows (safe — category was just added).
 
+// load_type — whether a set on this exercise takes a weight. The live workout card and
+// PR tracking key off it (Hollow Rock and Dead Bug used to be shown as "reps × 0lb"):
+//   'weighted'        — external load is the point (barbell, dumbbell, cable, machine)
+//   'bodyweight'      — no external load: the weight field is hidden, any stray weight ignored
+//   'bodyweight_plus' — bodyweight by default, added load optional (belt, plate, vest) —
+//                       both a bodyweight-reps PR and a weighted PR are kept
+// Added here rather than in MIGRATIONS so the one-time backfill below knows it just ran.
+let loadTypeAdded = false;
+try {
+  db.exec(`ALTER TABLE exercises ADD COLUMN load_type TEXT NOT NULL DEFAULT 'weighted'`);
+  loadTypeAdded = true;
+} catch (_) {}
+
+// Offline sync: change feed, op log, field clocks and their triggers (server/db/sync-schema.js).
+// Must run after every table and column exists (the triggers list the columns; DROP TABLE in
+// the rebuild above drops triggers) and BEFORE the seed/cleanup writes below, so devices
+// receive boot-time exercise inserts, updates and duplicate deletions through the feed.
+const syncSchema = require('./sync-schema');
+syncSchema.installSyncSchema(db);
+
+const BODYWEIGHT_EXERCISES = new Set([
+  'Inverted Row', 'Pistol Squat', 'Nordic Curl', 'Side Plank', 'Hollow Hold', 'Hollow Rock',
+  'Dead Bug', 'Hanging Knee Raise', 'Hanging Leg Raise', 'Lying Leg Raise', 'Ab Wheel Rollout',
+  'Mountain Climbers', 'Side Plank Dips', 'Crunch', 'Reverse Crunch', 'Flutter Kicks',
+  'Running', 'Cycling (Stationary)', 'Rowing (Erg)', 'Jump Rope', 'Burpees', 'Box Jump',
+]);
+const BODYWEIGHT_PLUS_EXERCISES = new Set([
+  'Pull-Up', 'Chin-Up', 'Dip', 'Push-Up', 'Plank', 'Russian Twist', 'Walking Lunge',
+]);
+// Warmup/cooldown moves are bodyweight unless they load a bar or cable.
+const WEIGHTED_WARMUPS = new Set(['Barbell Primer', 'Face Pull (Warm-up)']);
+
+function loadTypeFor(name, cat) {
+  if (BODYWEIGHT_PLUS_EXERCISES.has(name)) return 'bodyweight_plus';
+  if (BODYWEIGHT_EXERCISES.has(name)) return 'bodyweight';
+  if ((cat === 'warmup' || cat === 'cooldown') && !WEIGHTED_WARMUPS.has(name)) return 'bodyweight';
+  return 'weighted';
+}
+
 const checkEx  = db.prepare('SELECT id FROM exercises WHERE name = ?');
 const insertEx = db.prepare(`
-  INSERT INTO exercises (name, exercise_type, category, primary_muscles, secondary_muscles, met_value, description)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO exercises (name, exercise_type, category, primary_muscles, secondary_muscles, met_value, description, load_type)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const setCat = db.prepare(`UPDATE exercises SET category = ? WHERE name = ?`);
 const setDesc = db.prepare(`UPDATE exercises SET description = ? WHERE name = ? AND (description IS NULL OR description = '')`);
+// One-time backfill when the column first appears; afterwards it's user-editable.
+const setLoad = db.prepare(`UPDATE exercises SET load_type = ? WHERE name = ?`);
 
 function ex(name, type, cat, pri, sec, met, desc = null) {
   if (!checkEx.get(name)) {
-    insertEx.run(name, type, cat, JSON.stringify(pri), JSON.stringify(sec), met, desc);
+    insertEx.run(name, type, cat, JSON.stringify(pri), JSON.stringify(sec), met, desc, loadTypeFor(name, cat));
+  } else if (loadTypeAdded) {
+    setLoad.run(loadTypeFor(name, cat), name);
   }
   setCat.run(cat, name);
   if (desc) setDesc.run(desc, name);
 }
 
+// One-line stub descriptions some rows were created with — cleared (only while still the
+// exact stub) so the seed below fills in the full setup/cues/tips text.
+{
+  const STUB_DESCRIPTIONS = {
+    'Bulgarian Split Squat':     'Single-leg squat with rear foot elevated. Unilaterally loads quads and glutes.',
+    'Standing Calf Raise':       'Rise onto the balls of your feet under load. Targets gastrocnemius.',
+    'Seated Calf Raise':         'Seated with weight on knees. Emphasizes the soleus.',
+    'Kneeling Cable Crunch':     'Kneel at cable, crunch spine downward. Constant tension on abs.',
+    'Cable Pull-Through':        'Hip-hinge using a low cable. Loads glutes/hamstrings with constant resistance.',
+    'Overhead Tricep Extension': 'Tricep isolation with arms overhead — maximizes long-head stretch.',
+  };
+  const clearStub = db.prepare(`UPDATE exercises SET description = NULL WHERE name = ? AND description = ?`);
+  for (const [name, stub] of Object.entries(STUB_DESCRIPTIONS)) clearStub.run(name, stub);
+}
+
 db.transaction(() => {
   // ── Warmup ──────────────────────────────────────────────────────────────────
-  ex('Jumping Jacks',              'timed', 'warmup', ['quads','calves'],              ['core','shoulders'],          2.5,
+  ex('Jumping Jacks',              'timed', 'warmup', ['quads','calves'],              ['core','shoulders'],          4.0,
     'Stand upright, feet together. Jump feet wide while raising arms overhead — then jump back to start. Keep a slight knee bend on landing. Breathe rhythmically; aim for a comfortable pace to gradually raise heart rate.');
   ex('Arm Circles',                'timed', 'warmup', ['shoulders'],                   ['rotator_cuff'],              2.5,
     'Stand tall with arms extended out to the sides. Make small circles forward for half the time, then reverse direction. Gradually increase circle size. Keep chest open and core lightly braced throughout.');
@@ -400,6 +458,8 @@ db.transaction(() => {
     'Hold a resistance band or towel with a wide overhand grip, arms straight. Keeping arms straight throughout, raise the band overhead and continue down behind your back, then reverse. 10 reps. Mobilizes the shoulder joint through its full range.');
   ex('Thoracic Extension (Bench)', 'reps',  'warmup', ['upper_back','lats'],            ['shoulders'],                 2.5,
     'Kneel in front of a bench and place your elbows on top of it. Drop your chest toward the floor to stretch the lats and extend the upper back. 10 reps. Opens the thoracic spine before overhead and horizontal pressing.');
+  ex('Scapular Push-Up',           'reps',  'warmup', ['upper_back'],                   ['shoulders','core'],          3.0,
+    'Hold a push-up plank position, arms straight. Without bending the elbows, let your shoulder blades sink together (retract), then push them apart, rounding the upper back (protract). Move only at the shoulder blades — hips and elbows stay locked. 10 reps. Primes the shoulder blades for heavy pressing and pulling.');
 
   // ── Strength — Barbell / Squat Rack ─────────────────────────────────────────
   ex('Back Squat',                 'reps',  'strength', ['quads','glutes'],             ['hamstrings','core','lower_back'], 5.5,
@@ -432,10 +492,18 @@ db.transaction(() => {
     'Stand with bar at hip level, underhand grip shoulder-width. Keep elbows pinned at sides. Curl bar toward chin — squeeze biceps. Lower slowly (3 seconds). No swinging — if you need to swing, it\'s too heavy. Fully extend arms at bottom to maximize range of motion.');
   ex('Barbell Lunge',              'reps',  'strength', ['quads','glutes'],             ['hamstrings','calves'],            5.0,
     'Bar on traps. Step forward into a long stride. Lower back knee toward floor (hover, don\'t touch). Front knee tracks over toes. Drive through front heel to return. Alternate legs or complete all reps on one side. Keep torso upright — forward lean shifts load to glutes (not bad, but be intentional).');
-  ex('Zercher Squat',              'reps',  'strength', ['quads','biceps','core'],      ['glutes','upper_back'],            5.5,
+  ex('Zercher Squat',              'reps',  'strength', ['quads','glutes','core'],      ['upper_back','biceps'],            5.5,
     'Bar held in the crook of your elbows, arms crossed or clasped. The front-loaded position creates massive core and upper-back demand. Squat to depth — elbows may touch inner thighs. Very upright torso required. Uncomfortable at first; use a bar pad or towel until adapted.');
   ex('Power Clean',                'reps',  'strength', ['glutes','hamstrings','shoulders'], ['core','upper_back','quads'], 6.0,
     'Start like a deadlift. Explosively extend hips and knees, shrug shoulders, then pull elbows around and under the bar as it rises to shoulder height (catch in a quarter-squat). Timing and hip explosion are everything. Practice technique with lighter weights. Olympic lifting coach recommended for beginners.');
+  ex('Sumo Deadlift',              'reps',  'strength', ['glutes','hamstrings'],        ['quads','lower_back','lats'],      6.0,
+    'Stand wide, toes turned out 30–45°. Grip the bar inside your legs. Set your hips low, chest up, arms straight. Drive through the floor with your legs and pull the bar close to the body. Lock hips and knees simultaneously at the top.');
+  ex('Barbell Shrug',              'reps',  'strength', ['upper_back'],                 ['forearms'],                       3.5,
+    'Stand tall holding the bar at arm\'s length, overhand grip just outside the thighs. Elevate shoulders straight up toward your ears — no rolling. Hold 1 second at the top, lower slowly. Arms stay straight; this is not a curl or an upright row.\n\n💡 Straps help once grip, not traps, becomes the limit.');
+  ex('Skull Crusher',              'reps',  'strength', ['triceps'],                    [],                                 3.5,
+    'Lie on a bench, barbell or EZ bar held above chest with arms straight. Keeping upper arms vertical and stationary, hinge at the elbows and lower the bar toward your forehead or just past it. Press back to full extension. Keep elbows from flaring.');
+  ex('EZ Bar Curl',                'reps',  'strength', ['biceps'],                     ['forearms'],                       3.5,
+    'Stand with an EZ bar gripped at the angled sections, palms facing up at ~45°. Keeping upper arms stationary at your sides, curl the bar up by flexing the biceps. Lower slowly. The angled grip reduces wrist and elbow stress vs. a straight bar.');
 
   // ── Strength — Dumbbell ──────────────────────────────────────────────────────
   ex('Dumbbell Bench Press',       'reps',  'strength', ['chest','triceps'],            ['shoulders'],                      5.0,
@@ -472,6 +540,20 @@ db.transaction(() => {
     'Stand in front of a box or bench. Place one foot fully on the surface. Drive through that heel to step up — don\'t push off back foot. Step down with control. Complete all reps on one leg before switching. Box height should allow your thigh to be parallel or higher at start position.');
   ex('Dumbbell Shrug',             'reps',  'strength', ['upper_back'],                 [],                                 3.5,
     'Dumbbells at sides. Elevate shoulders straight up toward ears — no rolling, no forward/backward motion. Hold 1 second at top. Lower slowly. Targets the upper trapezius. Rolling shrugs can strain the shoulder joint — keep it strictly vertical.');
+  ex('Arnold Press',               'reps',  'strength', ['shoulders'],                  ['triceps'],                        4.5,
+    'Start seated or standing with dumbbells at shoulder height, palms facing you. As you press overhead, rotate your palms to face forward at the top. Reverse the rotation on the way down back to the start position. The rotation engages all three deltoid heads.');
+  ex('Dumbbell Preacher Curl',     'reps',  'strength', ['biceps'],                     ['forearms'],                       3.5,
+    'Sit at a preacher bench, upper arms resting flat on the pad. Hold a dumbbell with a supinated grip. Curl up by flexing the bicep — pause at full contraction. Lower slowly to near full extension. The pad eliminates swing and isolates the bicep peak.');
+  ex('Overhead Tricep Extension',  'reps',  'strength', ['triceps'],                    [],                                 3.5,
+    'Stand or sit tall holding one dumbbell overhead with both hands (or a rope on a low cable, facing away). Keep upper arms close to your head and pointing at the ceiling. Lower the weight behind your head by bending only at the elbows until you feel a deep tricep stretch, then extend back to lockout. The overhead position stretches the long head of the tricep more than any pushdown.\n\n⚠️ Common mistakes: Elbows flaring wide, arching the lower back to get the weight up, letting the upper arms drift forward.');
+  ex('Walking Lunge',              'reps',  'strength', ['quads','glutes'],             ['hamstrings','core'],              5.0,
+    'Stand tall. Step forward with one foot and lower your back knee toward the floor — front shin vertical, front knee tracking over the ankle. Drive through the front foot to stand, then step the other foot forward. Maintain an upright torso throughout. Hold dumbbells at your sides to add load.');
+  ex('Bulgarian Split Squat',      'reps',  'strength', ['quads','glutes'],             ['hamstrings','calves'],            5.0,
+    'Stand about two feet in front of a bench and rest the top of your back foot on it. Holding dumbbells at your sides (or bodyweight), lower straight down until the back knee nearly touches the floor — front shin roughly vertical, torso upright. Drive through the front heel to stand. Complete all reps on one leg, then switch.\n\n💡 A slight forward lean shifts more work to the glutes; staying upright keeps it on the quads.\n\n⚠️ Common mistakes: Standing too close to the bench, pushing off the back foot, letting the front knee cave inward.');
+  ex('Dumbbell Lying Leg Curl',    'reps',  'strength', ['hamstrings'],                 ['calves','glutes'],                3.5,
+    'Lie face down on a flat bench, dumbbell pinched between your feet (cross the top foot over the bottom one to grip it). Curl heels toward your glutes — squeeze hamstrings hard at the top. Lower with control, stopping just short of full extension to keep tension on. Keep hips pressed into the bench throughout — don\'t let them rise to cheat the curl.');
+  ex('Standing Calf Raise',        'reps',  'strength', ['calves'],                     [],                                 3.5,
+    'Stand with the balls of your feet on a step or plate, heels hanging off, holding dumbbells or under a calf-raise machine. Lower your heels as far as they go for a full stretch, pause, then rise as high as possible onto your toes and squeeze. Knees stay straight (not locked) — that keeps the work on the gastrocnemius.\n\n💡 Pause 1–2 seconds at the bottom — bouncing out of the stretch is what makes calf raises useless.');
 
   // ── Strength — Kettlebell ───────────────────────────────────────────────────
   ex('Kettlebell Swing',           'reps',  'strength', ['glutes','hamstrings'],        ['lower_back','core'],              6.0,
@@ -499,7 +581,7 @@ db.transaction(() => {
   ex('Lat Pulldown (Wide Grip)',   'reps',  'strength', ['lats'],                       ['biceps','upper_back'],            4.5,
     'Wide overhand grip on bar. Slight lean back (10–15°). Pull bar to upper chest — drive elbows down and back. Squeeze lats at the bottom. Slowly return. Do NOT use momentum or excessive body rocking. The lats initiate the pull, not the biceps.\n\n💡 Cue: "Pull your elbows into your back pockets."');
   ex('Lat Pulldown (Close Grip)',  'reps',  'strength', ['lats','biceps'],              ['upper_back'],                     4.5,
-    'Narrow neutral-grip handle. Sit upright or with slight lean back. Pull handles to upper chest — elbows drive straight down. More bicep involvement than wide-grip due to supination. Great variation to alternate with wide grip for complete lat development.');
+    'Narrow neutral-grip handle. Sit upright or with slight lean back. Pull handles to upper chest — elbows drive straight down. More bicep involvement than wide-grip because the narrow grip lets the elbows travel further. Great variation to alternate with wide grip for complete lat development.');
   ex('Seated Cable Row',           'reps',  'strength', ['upper_back','lats'],          ['biceps','rear_delts'],            4.5,
     'Sit with slight lean forward. Pull handle to lower chest/upper abdomen — elbows drive back past torso. Squeeze shoulder blades together at peak. Slowly extend back forward (don\'t let the stack slam). Avoid rounding forward excessively on the stretch — feel it, don\'t force it.');
   ex('Face Pull',                  'reps',  'strength', ['rear_delts','upper_back'],    ['rotator_cuff'],                   3.5,
@@ -511,9 +593,25 @@ db.transaction(() => {
   ex('Straight-Arm Pulldown',      'reps',  'strength', ['lats'],                       ['triceps'],                        4.0,
     'High cable, straight bar or rope. Arms extended, slight bend in elbows. Hinge slightly at hips. Pull bar down to hips in an arc — elbows stay straight throughout. This is pure lat isolation without bicep involvement. Excellent pre-exhaust for lats before rows or pulldowns.');
   ex('Cable Fly',                  'reps',  'strength', ['chest'],                      ['shoulders'],                      4.0,
-    'Cables set at chest height (mid) or high for upper chest, low for upper chest. Step forward with slight lean. Arms extended with slight elbow bend — maintain this angle. Bring hands together in front of chest in a hugging motion. Squeeze pecs at center. Slowly return. Better chest isolation than dumbbell flies for many due to constant cable tension.');
+    'Cables set at chest height for mid chest, high for lower chest, low for upper chest. Step forward with slight lean. Arms extended with slight elbow bend — maintain this angle. Bring hands together in front of chest in a hugging motion. Squeeze pecs at center. Slowly return. Better chest isolation than dumbbell flies for many due to constant cable tension.');
   ex('Cable Row (Single Arm)',     'reps',  'strength', ['upper_back','lats'],          ['biceps','rear_delts'],            4.5,
     'One arm at a time with D-handle. Row to hip, rotating torso slightly (anti-rotation core benefit). Allows greater range of motion and corrects left-right imbalances vs. barbell rowing.');
+  ex('Kneeling Cable Crunch',      'reps',  'strength', ['core'],                       [],                                 3.0,
+    'Kneel facing a high cable with a rope attachment, hands holding the rope beside your head. Hips stay stacked over knees. Crunch down by curling your spine — bring elbows toward your thighs — then return slowly against the stack. The movement is spinal flexion, not a hip hinge.\n\n⚠️ Common mistakes: Sitting the hips back to the heels, pulling with the arms, letting the weight yank you back up.');
+  ex('Cable Pull-Through',         'reps',  'strength', ['glutes','hamstrings'],        ['lower_back'],                     4.0,
+    'Stand facing away from a low cable, rope between your legs, feet a bit wider than hips. Hinge at the hips, letting the rope pull your hands back between your thighs — soft knees, neutral spine. Drive the hips forward to stand tall and squeeze the glutes hard at the top. Arms are just hooks.\n\n💡 A friendly way to learn the hip hinge before kettlebell swings and deadlifts.');
+  ex('Single-Leg Cable Curl',      'reps',  'strength', ['hamstrings'],                 ['calves','glutes'],                3.5,
+    'Attach an ankle cuff to a low cable. Stand facing the machine, cuffed leg back. Keeping the standing leg slightly bent and torso stable, curl the cuffed heel up toward your glute — squeeze the hamstring hard at the top. Lower with control. Hold the machine or a rack for balance. Constant cable tension hits the hamstring through its full range, unlike the dead spot at the bottom of a lying leg curl.');
+
+  // ── Strength — Machines ─────────────────────────────────────────────────────
+  ex('Leg Press',                  'reps',  'strength', ['quads'],                      ['glutes','hamstrings'],            5.0,
+    'Sit with your back and hips flat against the pad, feet shoulder-width in the middle of the platform. Release the safeties and lower the sled until your knees reach about 90° (or as deep as your lower back stays on the pad). Press through the whole foot to just short of lockout.\n\n⚠️ Common mistakes: Letting the hips curl off the pad at the bottom, locking the knees hard at the top, bouncing out of the bottom.');
+  ex('Leg Extension',              'reps',  'strength', ['quads'],                      [],                                 3.5,
+    'Sit in the machine, the pad resting on your lower shins just above the ankles. Extend both legs until straight, squeezing the quads at the top. Lower slowly — 2–3 seconds on the descent. Avoid swinging; this is a pure quad isolation.');
+  ex('Seated Leg Curl',            'reps',  'strength', ['hamstrings'],                 ['calves'],                         3.5,
+    'Sit in the machine with the pad resting on your lower legs just above the heels. Curl your legs downward by flexing the hamstrings through the full range. Lower slowly and under control. Avoid letting your hips lift off the seat to compensate.');
+  ex('Seated Calf Raise',          'reps',  'strength', ['calves'],                     [],                                 3.0,
+    'Sit at a seated calf-raise machine (or with a loaded barbell/dumbbells on your knees), balls of the feet on the platform. Lower the heels into a deep stretch, pause, then press up as high as you can and squeeze. The bent knee takes the gastrocnemius out of the movement and emphasizes the soleus.\n\n💡 Slow, full-range reps beat heavy bouncing.');
 
   // ── Strength — Bodyweight ───────────────────────────────────────────────────
   ex('Pull-Up',                    'reps',  'strength', ['lats','upper_back'],          ['biceps','rear_delts'],            5.0,
@@ -548,6 +646,20 @@ db.transaction(() => {
     'Kneel on pad, hold ab wheel under shoulders. Brace core hard. Roll forward — hips drop slightly but back stays neutral. Go as far as you can control, then pull back using core and lats. Never let your lower back sag into extension.\n\n⚠️ This is an advanced exercise. Start with partial range-of-motion rollouts. Do NOT attempt full rollouts until you have a solid plank hold.');
   ex('Mountain Climbers',          'timed', 'strength', ['core','quads'],               ['shoulders'],                      5.0,
     'Push-up position, hands under shoulders. Drive one knee toward chest, then rapidly alternate — like running in place horizontally. Keep hips level — don\'t let them bounce up with each step. Keep core braced. Speed is secondary to control. A great metabolic core exercise.');
+  ex('Hollow Rock',                'reps',  'strength', ['core'],                       ['hip_flexor'],                     3.5,
+    'Start in hollow body position: lie on back, lower back pressed flat into the floor, arms extended overhead, legs straight and raised. Rock forward and back as a single rigid unit — do NOT let the lower back lose contact with the floor or break at the hips. The rock comes from the shape, not from bending. If the lower back arches, regress to bent knees or a shorter range.\n\n💡 Think of yourself as a rocking chair — the curve is built in, the body stays stiff.\n\n⚠️ Common mistakes: Letting the back arch off the floor, piking at the hips, using momentum to flop rather than controlled rocking.');
+  ex('Lying Leg Raise',            'reps',  'strength', ['core'],                       ['hip_flexor'],                     3.5,
+    'Lie flat on your back, legs straight, hands tucked under your glutes or gripping something behind your head for support. Press your lower back INTO the floor — this is non-negotiable. Keeping legs straight, raise them to 90° (or as high as control allows), then lower slowly WITHOUT letting the lower back arch off the floor. Stop the descent just before it does.\n\nThis is the floor version of the hanging leg raise — more accessible but requires strict lumbar control.\n\n💡 If the lower back peels off the floor at the bottom, stop there or bend the knees slightly as a regression.\n\n⚠️ Common mistakes: Letting the lower back arch and lift off the floor, using momentum to swing the legs up, dropping the legs too fast.');
+  ex('Side Plank Dips',            'reps',  'strength', ['core'],                       ['shoulders'],                      4.0,
+    'Start in a side plank on your forearm, hips stacked, body in a straight line from head to feet. Lower your hips down toward the floor, then drive them back up to the starting plank height — squeeze the obliques to lift, not momentum. Keep hips stacked throughout; don\'t let them roll forward or back. 10–15 reps per side. A dynamic progression from a static side plank that adds direct oblique loading.');
+  ex('Russian Twist',              'reps',  'strength', ['core'],                       ['hip_flexor'],                     4.0,
+    'Sit on floor, knees bent, feet raised or anchored. Lean back to ~45°, spine neutral. Hold a weight at chest height (or clasp your hands). Rotate your torso to touch or reach the floor on each side, leading with your shoulders — not just your arms. 10–15 reps per side.');
+  ex('Crunch',                     'reps',  'strength', ['core'],                       [],                                 3.0,
+    'Lie on your back, knees bent, feet flat. Place hands lightly behind your head — don\'t pull. Curl only your upper back off the floor by contracting your abs. Hold briefly at the top. Keep your lower back pressed into the floor throughout.');
+  ex('Reverse Crunch',             'reps',  'strength', ['core'],                       ['hip_flexor'],                     3.5,
+    'Lie flat, hands at your sides or under your lower back. Bring knees to chest, then curl your pelvis upward — lifting hips off the floor by contracting the lower abs. The movement is small and controlled; lower slowly without letting momentum take over.');
+  ex('Flutter Kicks',              'timed', 'strength', ['core','hip_flexor'],          [],                                 4.0,
+    'Lie flat on your back, arms at sides. Press your lower back into the floor and lift both legs 6–12 inches. Alternately kick legs up and down in small, rapid pulses — legs straight throughout. Maintain tension; don\'t let the lower back arch.');
 
   // ── Cardio ──────────────────────────────────────────────────────────────────
   ex('Running',                    'timed', 'cardio',   ['quads','calves'],             ['glutes','hamstrings','core'],     8.0,
@@ -600,10 +712,82 @@ db.transaction(() => {
     'Extend one arm forward, palm up. With the other hand, gently pull fingers back toward you. Feel the stretch on the inside of the forearm. Hold 20–30 seconds per side. Essential after grip-heavy sessions (deadlifts, rows, curls) and for desk workers.');
 })();
 
+// ─── Exercise metadata corrections ────────────────────────────────────────────
+// ex() above only fills in missing rows/descriptions, so corrections to existing rows
+// live here. Each fix only fires while the row still holds the exact old value, so it
+// applies once and never overwrites something a user has since edited.
+db.transaction(() => {
+  const J = JSON.stringify;
+  const fix = (name, col, from, to) =>
+    db.prepare(`UPDATE exercises SET ${col} = ? WHERE name = ? AND ${col} = ?`).run(to, name, from);
+
+  // Muscle tags left over from the original seed, before the library was rewritten.
+  const muscles = (name, oldPri, oldSec, pri, sec) =>
+    db.prepare(`UPDATE exercises SET primary_muscles = ?, secondary_muscles = ?
+                WHERE name = ? AND primary_muscles = ? AND secondary_muscles = ?`)
+      .run(J(pri), J(sec), name, J(oldPri), J(oldSec));
+  muscles('Bench Press',            ['chest'], ['shoulders','triceps'], ['chest','triceps'], ['shoulders']);
+  muscles('Incline Dumbbell Press', ['chest'], ['shoulders','triceps'], ['chest','triceps'], ['shoulders']);
+  muscles('Overhead Press',         ['shoulders'], ['triceps'],         ['shoulders','triceps'], ['core','upper_back']);
+  muscles('Deadlift', ['hamstrings','glutes'], ['lower_back','core'],   ['hamstrings','glutes','lower_back'], ['core','upper_back']);
+  // Biceps only hold the bar in a Zercher squat; the legs and trunk do the lift.
+  muscles('Zercher Squat', ['quads','biceps','core'], ['glutes','upper_back'], ['quads','glutes','core'], ['upper_back','biceps']);
+
+  // MET values out of line with similar moves.
+  fix('Jumping Jacks',           'met_value', 2.5, 4.0);  // was equal to arm circles
+  fix('Skull Crusher',           'met_value', 4.0, 3.5);  // other tricep isolation = 3.5
+  fix('Dumbbell Lying Leg Curl', 'met_value', 4.5, 3.5);  // other leg curls = 3.5
+  fix('Single-Leg Cable Curl',   'met_value', 4.0, 3.5);
+  fix('Scapular Push-Up',        'met_value', 4.0, 3.0);  // matches Scapular Pull-Up
+
+  // Wrong facts in descriptions.
+  fix('Cable Fly', 'description',
+    'Cables set at chest height (mid) or high for upper chest, low for upper chest. Step forward with slight lean. Arms extended with slight elbow bend — maintain this angle. Bring hands together in front of chest in a hugging motion. Squeeze pecs at center. Slowly return. Better chest isolation than dumbbell flies for many due to constant cable tension.',
+    'Cables set at chest height for mid chest, high for lower chest, low for upper chest. Step forward with slight lean. Arms extended with slight elbow bend — maintain this angle. Bring hands together in front of chest in a hugging motion. Squeeze pecs at center. Slowly return. Better chest isolation than dumbbell flies for many due to constant cable tension.');
+  fix('Lat Pulldown (Close Grip)', 'description',
+    'Narrow neutral-grip handle. Sit upright or with slight lean back. Pull handles to upper chest — elbows drive straight down. More bicep involvement than wide-grip due to supination. Great variation to alternate with wide grip for complete lat development.',
+    'Narrow neutral-grip handle. Sit upright or with slight lean back. Pull handles to upper chest — elbows drive straight down. More bicep involvement than wide-grip because the narrow grip lets the elbows travel further. Great variation to alternate with wide grip for complete lat development.');
+  fix('Scapular Push-Up', 'description',
+    'Hold a push-up plank position, arms straight. Without bending the elbows, let your shoulder blades sink together (protract) then push them apart, rounding the upper back (retract). Move only at the shoulder blades — hips and elbows stay locked. 10 reps. Primes the shoulder blades for heavy pressing and pulling.',
+    'Hold a push-up plank position, arms straight. Without bending the elbows, let your shoulder blades sink together (retract), then push them apart, rounding the upper back (protract). Move only at the shoulder blades — hips and elbows stay locked. 10 reps. Primes the shoulder blades for heavy pressing and pulling.');
+
+  // Muscle keys the MuscleMap doesn't know ('obliques', 'hip_flexors', 'brachialis' came in
+  // through scripts and hand edits) — they render as raw text and never highlight. Map
+  // them onto the app's keys; applies to every row, user-created ones included, since
+  // the meaning is unambiguous.
+  const ALIASES = { obliques: 'core', hip_flexors: 'hip_flexor', brachialis: 'biceps' };
+  for (const row of db.prepare(`SELECT id, primary_muscles, secondary_muscles FROM exercises`).all()) {
+    let pri, sec;
+    try { pri = JSON.parse(row.primary_muscles || '[]'); sec = JSON.parse(row.secondary_muscles || '[]'); }
+    catch (_) { continue; }
+    if (![...pri, ...sec].some(m => ALIASES[m])) continue;
+    const norm = list => [...new Set(list.map(m => ALIASES[m] ?? m))];
+    const newPri = norm(pri);
+    const newSec = norm(sec).filter(m => !newPri.includes(m));
+    db.prepare(`UPDATE exercises SET primary_muscles = ?, secondary_muscles = ? WHERE id = ?`)
+      .run(J(newPri), J(newSec), row.id);
+  }
+
+  // Leftovers of the very first seed that duplicate a library exercise under a slightly
+  // different name ("Pull-up" next to "Pull-Up"). Removed only while untouched (no
+  // description) and unused by any routine, session or PR — otherwise left alone.
+  const LEGACY_DUPES = ['Squat', 'Pull-up', 'Barbell Row', 'Tricep Pushdown', 'Lat Pulldown', 'Hip Thrust', 'Dips'];
+  for (const name of LEGACY_DUPES) {
+    db.prepare(`
+      DELETE FROM exercises
+      WHERE name = ? AND (description IS NULL OR description = '') AND (gif_url IS NULL OR gif_url = '')
+        AND id NOT IN (SELECT exercise_id FROM routine_exercises)
+        AND id NOT IN (SELECT exercise_id FROM session_exercises)
+        AND id NOT IN (SELECT exercise_id FROM personal_bests)
+    `).run(name);
+  }
+})();
+
 // ─── Exercise animation images ────────────────────────────────────────────────
 // All illustrated exercises are self-hosted in client/public/exercises/ — either a
 // single animated GIF (downloaded via server/scripts/download-exercise-gifs.py from
-// hasaneyldrm/exercises-dataset, non-commercial license, fine for this personal app)
+// hasaneyldrm/exercises-dataset — animations © Gym visual, redistributed there with
+// permission on condition of attribution, which ExerciseAnimation.tsx shows)
 // or a local two-frame JPG pair mirrored from free-exercise-db (CC0), served at
 // /exercises/*.gif or /exercises/<slug>/0.jpg respectively. No exercise depends on a
 // live external CDN — setGif always overwrites, since these are app-managed visuals,
@@ -663,19 +847,80 @@ db.transaction(() => {
     'Hanging Knee Raise':         'hanging-knee-raise',
     'Mountain Climbers':          'mountain-climbers',
     'Burpees':                    'burpees',
-    'Box Jump':                   'box-jump',
     'Side Plank':                 'side-plank',
     'Face Pull':                  'face-pull',
     'Kettlebell Windmill':        'kettlebell-windmill',
     'Ab Wheel Rollout':           'ab-wheel-rollout',
+    // Added in the 2026-10 exercise audit (each checked frame-by-frame against the move).
+    'Plank':                      'plank',
+    'Incline Barbell Bench Press': 'incline-barbell-bench-press',
+    'Rack Pull':                  'rack-pull',
+    'Kettlebell Snatch':          'kettlebell-snatch',
+    'Kettlebell Row':             'kettlebell-row',
+    'Kettlebell Figure-8':        'kettlebell-figure-8',
+    'Cable Curl':                 'cable-curl',
+    'Cable Row (Single Arm)':     'cable-row-single-arm',
+    'Pistol Squat':               'pistol-squat',
+    'Nordic Curl':                'nordic-curl',
+    'Running':                    'running',
+    'Cycling (Stationary)':       'cycling-stationary',
+    'Jump Rope':                  'jump-rope',
+    'Inchworm':                   'inchworm',
+    "World's Greatest Stretch":   'worlds-greatest-stretch',
+    'Glute Bridge (Bodyweight)':  'glute-bridge-bodyweight',
+    'Scapular Pull-Up':           'scapular-pull-up',
+    'Scapular Push-Up':           'scapular-push-up',
+    'Standing Calf Stretch':      'standing-calf-stretch',
+    'Seated Figure-4 Stretch':    'seated-figure-4-stretch',
+    'Neck Side Stretch':          'neck-side-stretch',
+    'Leg Press':                  'leg-press',
+    'Bulgarian Split Squat':      'bulgarian-split-squat',
+    'Standing Calf Raise':        'standing-calf-raise',
+    'Seated Calf Raise':          'seated-calf-raise',
+    'Kneeling Cable Crunch':      'kneeling-cable-crunch',
+    'Cable Pull-Through':         'cable-pull-through',
+    'Overhead Tricep Extension':  'overhead-tricep-extension',
+    'Lying Leg Raise':            'lying-leg-raise',
+    // Formerly only set by the one-off add-missing-exercises script, so a re-seeded or
+    // fresh database lost them.
+    'Russian Twist':              'russian-twist',
+    'Crunch':                     'crunch',
+    'Reverse Crunch':             'reverse-crunch',
+    'Flutter Kicks':              'flutter-kicks',
+    'Skull Crusher':              'skull-crusher',
+    'Leg Extension':              'leg-extension',
+    'Seated Leg Curl':            'seated-leg-curl',
+    'Walking Lunge':              'walking-lunge',
+    'Sumo Deadlift':              'sumo-deadlift',
+    'Arnold Press':               'arnold-press',
+    'Dumbbell Preacher Curl':     'dumbbell-preacher-curl',
+    'EZ Bar Curl':                'ez-bar-curl',
+    // Same movement as an existing illustration.
+    'Pause Squat':                'back-squat',
+    'Face Pull (Warm-up)':        'face-pull',
   };
 
   // Two-frame local pairs (client/public/exercises/<slug>/0.jpg + 1.jpg) — the same
   // frame-swap convention ExerciseAnimation.tsx uses for remote two-frame sources,
-  // just self-hosted instead of hotlinked (mirrored from free-exercise-db, CC0).
+  // just self-hosted instead of hotlinked (mirrored from free-exercise-db, CC0). Only
+  // used where the GIF dataset has nothing that matches the move.
   const LOCAL_TWO_FRAME = {
-    'Plank':            'plank',
-    'Bodyweight Squat': 'bodyweight-squat',
+    'Bodyweight Squat':          'bodyweight-squat',
+    'Bodyweight Pause Squat':    'bodyweight-squat',
+    'Box Jump':                  'box-jump',    // the GIF set only has a jump *down* from a box
+    'Band Pull-Apart':           'band-pull-apart',
+    'Cat-Cow':                   'cat-cow',
+    "Child's Pose":              'childs-pose',
+    'Arm Circles':               'arm-circles',
+    'Foam Rolling — Quads':      'foam-rolling-quads',
+    'Foam Rolling — IT Band':    'foam-rolling-it-band',
+    'Foam Rolling — Hamstrings': 'foam-rolling-hamstrings',
+    'Foam Rolling — Upper Back': 'foam-rolling-upper-back',
+    'Rowing (Erg)':              'rowing-erg',
+    'Sled Push':                 'sled-push',
+    'Seated Hamstring Stretch':  'seated-hamstring-stretch',
+    'Hip Flexor Stretch':        'hip-flexor-stretch',
+    'Hip Flexor Lunge (Dynamic)': 'hip-flexor-lunge-dynamic',
   };
 
   db.transaction(() => {
@@ -1170,5 +1415,9 @@ db.prepare(`
 if (!checkIngredient.get('Chicken Thigh Bone-In Skin-On (raw)')) {
   insertIngredient.run('Chicken Thigh Bone-In Skin-On (raw)', 100, 'g', 186, 18.5, 0, 14.4, 0, 0);
 }
+
+// Offline sync: if any column was added after the sync triggers were installed above,
+// regenerate them so updates to it reach devices too (no-op when nothing changed).
+syncSchema.refreshTriggers(db);
 
 module.exports = db;

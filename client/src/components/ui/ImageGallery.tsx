@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, Trash2, ChevronLeft, ChevronRight, ImageIcon } from 'lucide-react';
 import { api } from '../../api/client';
+import ServerImage from './ServerImage';
 
 interface Image {
   id: number;
@@ -95,7 +96,7 @@ export default function ImageGallery({ entityType, entityId, compact = false }: 
             onClick={() => openLightbox(idx)}
             className={`${thumbSize} rounded-xl overflow-hidden border border-gray-700 hover:border-indigo-500 transition-colors shrink-0 relative group`}
           >
-            <img
+            <ServerImage
               src={img.url}
               alt={img.caption ?? ''}
               className="w-full h-full object-cover"
@@ -179,7 +180,7 @@ export default function ImageGallery({ entityType, entityId, compact = false }: 
                   <Trash2 size={16} />
                 </button>
               )}
-              <button onClick={closeLightbox} className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:bg-gray-700">
+              <button data-back-close onClick={closeLightbox} className="p-2 rounded-lg bg-gray-800 text-gray-400 hover:bg-gray-700">
                 <X size={16} />
               </button>
             </div>
@@ -192,7 +193,7 @@ export default function ImageGallery({ entityType, entityId, compact = false }: 
                 <ChevronLeft size={20} />
               </button>
             )}
-            <img
+            <ServerImage
               src={images[lightbox].url}
               alt={images[lightbox].caption ?? ''}
               className="max-w-full max-h-full object-contain rounded-xl"

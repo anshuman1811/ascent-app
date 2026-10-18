@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '../../components/ui/Toast';
 import { Search, Plus, Edit2, Trash2, Timer, BarChart2, ChevronDown } from 'lucide-react';
 import { api } from '../../api/client';
-import type { Exercise, ExerciseCategory } from '../../types';
+import type { Exercise, ExerciseCategory, LoadType } from '../../types';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
@@ -219,8 +219,8 @@ export default function ExerciseLibrary() {
 function ExerciseFormModal({ open, exercise, onClose, onSaved }: {
   open: boolean; exercise: Exercise | null; onClose: () => void; onSaved: () => void;
 }) {
-  type FormState = { name: string; exercise_type: 'reps' | 'timed'; category: ExerciseCategory; primary_muscles: string[]; secondary_muscles: string[]; met_value: number; notes: string; description: string; gif_url: string };
-  const blank: FormState = { name: '', exercise_type: 'reps', category: 'strength', primary_muscles: [], secondary_muscles: [], met_value: 4.0, notes: '', description: '', gif_url: '' };
+  type FormState = { name: string; exercise_type: 'reps' | 'timed'; category: ExerciseCategory; load_type: LoadType; primary_muscles: string[]; secondary_muscles: string[]; met_value: number; notes: string; description: string; gif_url: string };
+  const blank: FormState = { name: '', exercise_type: 'reps', category: 'strength', load_type: 'weighted', primary_muscles: [], secondary_muscles: [], met_value: 4.0, notes: '', description: '', gif_url: '' };
   const [form, setForm] = useState<FormState>(exercise ? { ...blank, ...exercise, description: exercise.description ?? '', gif_url: exercise.gif_url ?? '' } : blank);
 
   const save = useMutation({
@@ -251,6 +251,16 @@ function ExerciseFormModal({ open, exercise, onClose, onSaved }: {
           value={form.exercise_type}
           onChange={e => setForm(f => ({ ...f, exercise_type: e.target.value as 'reps' | 'timed' }))}
           options={[{ value: 'reps', label: 'Rep-based (weights, bodyweight)' }, { value: 'timed', label: 'Timed (plank, running, stretches)' }]}
+        />
+        <Select
+          label="Load"
+          value={form.load_type}
+          onChange={e => setForm(f => ({ ...f, load_type: e.target.value as LoadType }))}
+          options={[
+            { value: 'weighted', label: 'Weighted (barbell, dumbbell, cable, machine)' },
+            { value: 'bodyweight_plus', label: 'Bodyweight, extra weight optional (pull-up, dip)' },
+            { value: 'bodyweight', label: 'Bodyweight only — no weight field (dead bug, stretches)' },
+          ]}
         />
         <Input label="MET value (for calorie estimate)" type="number" step="0.5" value={form.met_value}
           onChange={e => setForm(f => ({ ...f, met_value: parseFloat(e.target.value) || 4 }))} />

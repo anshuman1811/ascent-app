@@ -14,7 +14,7 @@ function getSession(sessionId) {
   if (!session) return null;
   const exercises = db.prepare(`
     SELECT se.*, e.name as exercise_name, e.exercise_type, e.category, e.primary_muscles,
-      e.secondary_muscles, e.met_value, e.description, e.gif_url
+      e.secondary_muscles, e.met_value, e.description, e.gif_url, e.load_type
     FROM session_exercises se
     JOIN exercises e ON e.id = se.exercise_id
     WHERE se.session_id = ?
@@ -47,7 +47,7 @@ function recomputePBsForExercise(userId, exerciseId) {
   // progressive overload — tracking a "PR" on them doesn't make sense. Clear any
   // stale is_pb flags/personal_bests left over from before this category existed
   // and skip recomputation entirely.
-  const { category } = db.prepare('SELECT category FROM exercises WHERE id = ?').get(exerciseId);
+  const { category, load_type } = db.prepare('SELECT category, load_type FROM exercises WHERE id = ?').get(exerciseId);
   if (category === 'warmup' || category === 'cooldown') {
     db.prepare(`
       UPDATE set_logs SET is_pb = 0 WHERE id IN (
@@ -76,8 +76,12 @@ function recomputePBsForExercise(userId, exerciseId) {
   let bestBodyweightReps = -1, bestBodyweightRow = null;
   let bestDuration = -1, bestDurationRow = null;
 
+  // A bodyweight-only move has no weighted version: any weight logged on it (e.g. carried
+  // over from a routine target) is ignored and every set competes on reps alone.
+  const ignoreWeight = load_type === 'bodyweight';
+
   for (const s of allSets) {
-    if (s.actual_reps != null && s.actual_weight_value && s.actual_weight_value > 0) {
+    if (!ignoreWeight && s.actual_reps != null && s.actual_weight_value && s.actual_weight_value > 0) {
       hasWeightedSets = true;
       const kg = toKg(s.actual_weight_value, s.actual_weight_unit);
       // 1 = beats the PB so far, 2 = equals it, 0 = neither (or too few reps to count).
@@ -109,7 +113,9 @@ function recomputePBsForExercise(userId, exerciseId) {
   // If this exercise has any weighted history, a 0-weight set is not a meaningful
   // "bodyweight PR" — it's a data entry error (forgot to fill in weight). Clear those
   // is_pb flags and don't persist a bodyweight row alongside the weighted one.
-  if (hasWeightedSets && bestBodyweightRow) {
+  // Exception: 'bodyweight_plus' moves (pull-ups, dips…) are done both ways on purpose,
+  // so they keep a bodyweight-reps PR next to the weighted one.
+  if (hasWeightedSets && bestBodyweightRow && load_type !== 'bodyweight_plus') {
     for (const s of allSets) {
       if (s.actual_reps != null && (!s.actual_weight_value || s.actual_weight_value === 0)) {
         updateIsPb.run(0, s.id);
@@ -155,7 +161,8 @@ function recomputePBsForExercise(userId, exerciseId) {
 // One-time backfill: is_pb is only rebuilt for an exercise when one of its sets changes,
 // so after the PB rule itself changes, existing history needs a single full replay.
 // PRAGMA user_version records that it has run.
-const PB_RULES_VERSION = 2;
+// 3: bodyweight / bodyweight_plus exercises (exercises.load_type).
+const PB_RULES_VERSION = 3;
 if (db.pragma('user_version', { simple: true }) < PB_RULES_VERSION) {
   db.transaction(() => {
     const pairs = db.prepare(`
@@ -726,3 +733,5 @@ router.get('/user/:userId/pbs', (req, res) => {
 });
 
 module.exports = router;
+// Exercise edits (load type, category) change how history is scored — see routes/exercises.js.
+module.exports.recomputePBsForExercise = recomputePBsForExercise;

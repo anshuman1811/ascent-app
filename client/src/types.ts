@@ -102,11 +102,15 @@ export interface MacroTotals {
 
 export type ExerciseCategory = 'strength' | 'cardio' | 'warmup' | 'cooldown';
 
+/** weighted: external load; bodyweight: no weight field; bodyweight_plus: added load optional */
+export type LoadType = 'weighted' | 'bodyweight' | 'bodyweight_plus';
+
 export interface Exercise {
   id: number;
   name: string;
   exercise_type: 'reps' | 'timed';
   category: ExerciseCategory;
+  load_type?: LoadType;
   primary_muscles: string[];
   secondary_muscles: string[];
   met_value: number;
@@ -186,6 +190,7 @@ export interface SessionExercise {
   exercise_name: string;
   exercise_type: 'reps' | 'timed';
   category?: ExerciseCategory;
+  load_type?: LoadType;
   met_value?: number;
   primary_muscles: string[];
   secondary_muscles: string[];

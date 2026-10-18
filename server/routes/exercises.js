@@ -28,33 +28,41 @@ router.get('/:id', (req, res) => {
   res.json(parse(row));
 });
 
+// See server/db/index.js for what each load type means.
+const LOAD_TYPES = ['weighted', 'bodyweight', 'bodyweight_plus'];
+
 // POST /api/exercises
 router.post('/', (req, res) => {
   const {
     name, exercise_type = 'reps', category = 'strength',
     primary_muscles = [], secondary_muscles = [],
-    met_value = 4.0, notes, description, gif_url
+    met_value = 4.0, notes, description, gif_url, load_type = 'weighted'
   } = req.body;
   if (!name) return res.status(400).json({ error: 'name is required' });
+  if (!LOAD_TYPES.includes(load_type)) return res.status(400).json({ error: 'invalid load_type' });
 
   const result = db.prepare(`
-    INSERT INTO exercises (name, exercise_type, category, primary_muscles, secondary_muscles, met_value, notes, description, gif_url)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO exercises (name, exercise_type, category, primary_muscles, secondary_muscles, met_value, notes, description, gif_url, load_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(name, exercise_type, category,
          JSON.stringify(primary_muscles), JSON.stringify(secondary_muscles),
-         met_value, notes ?? null, description ?? null, gif_url ?? null);
+         met_value, notes ?? null, description ?? null, gif_url ?? null, load_type);
 
   res.status(201).json(parse(db.prepare('SELECT * FROM exercises WHERE id = ?').get(result.lastInsertRowid)));
 });
 
 // PUT /api/exercises/:id
 router.put('/:id', (req, res) => {
-  const { name, exercise_type, category, primary_muscles, secondary_muscles, met_value, notes, description, gif_url } = req.body;
+  const { name, exercise_type, category, primary_muscles, secondary_muscles, met_value, notes, description, gif_url, load_type } = req.body;
+  if (load_type !== undefined && !LOAD_TYPES.includes(load_type)) return res.status(400).json({ error: 'invalid load_type' });
+  const before = db.prepare('SELECT category, load_type FROM exercises WHERE id = ?').get(req.params.id);
+  if (!before) return res.status(404).json({ error: 'Exercise not found' });
   db.prepare(`
     UPDATE exercises SET
       name = COALESCE(?, name),
       exercise_type = COALESCE(?, exercise_type),
       category = COALESCE(?, category),
+      load_type = COALESCE(?, load_type),
       primary_muscles = COALESCE(?, primary_muscles),
       secondary_muscles = COALESCE(?, secondary_muscles),
       met_value = COALESCE(?, met_value),
@@ -62,13 +70,24 @@ router.put('/:id', (req, res) => {
       description = ?,
       gif_url = ?
     WHERE id = ?
-  `).run(name ?? null, exercise_type ?? null, category ?? null,
+  `).run(name ?? null, exercise_type ?? null, category ?? null, load_type ?? null,
          primary_muscles ? JSON.stringify(primary_muscles) : null,
          secondary_muscles ? JSON.stringify(secondary_muscles) : null,
          met_value ?? null, notes ?? null,
          description !== undefined ? description : db.prepare('SELECT description FROM exercises WHERE id = ?').get(req.params.id)?.description,
          gif_url !== undefined ? gif_url : db.prepare('SELECT gif_url FROM exercises WHERE id = ?').get(req.params.id)?.gif_url,
          req.params.id);
+
+  // Load type and category decide how sets are scored, so re-score this exercise's history.
+  const after = db.prepare('SELECT category, load_type FROM exercises WHERE id = ?').get(req.params.id);
+  if (after.category !== before.category || after.load_type !== before.load_type) {
+    const { recomputePBsForExercise } = require('./workouts');
+    const users = db.prepare(`
+      SELECT DISTINCT ws.user_id FROM session_exercises se
+      JOIN workout_sessions ws ON ws.id = se.session_id WHERE se.exercise_id = ?
+    `).all(req.params.id);
+    db.transaction(() => { for (const { user_id } of users) recomputePBsForExercise(user_id, Number(req.params.id)); })();
+  }
 
   res.json(parse(db.prepare('SELECT * FROM exercises WHERE id = ?').get(req.params.id)));
 });
@@ -107,7 +126,7 @@ router.get('/:id/history', (req, res) => {
     SELECT rep_count, weight_value, weight_unit, duration_seconds, achieved_at
     FROM personal_bests
     WHERE exercise_id = ? AND user_id = ?
-    ORDER BY rep_count ASC
+    ORDER BY COALESCE(weight_value, 0) > 0 DESC, rep_count ASC  -- weighted PR first (bodyweight_plus has both)
   `).all(req.params.id, user_id);
 
   res.json({

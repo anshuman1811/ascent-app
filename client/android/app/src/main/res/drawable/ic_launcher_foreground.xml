@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ascent chevrons (client/public/icon.svg), centred in the 66dp adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="1.9"
+        android:scaleY="1.9"
+        android:translateX="23.6"
+        android:translateY="23.6">
+        <path
+            android:pathData="M4,28 L16,20 L28,28"
+            android:strokeColor="#4338CA"
+            android:strokeAlpha="0.45"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M6,20 L16,12 L26,20"
+            android:strokeColor="#6366F1"
+            android:strokeAlpha="0.72"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M8,12 L16,4 L24,12"
+            android:strokeColor="#C4B5FD"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

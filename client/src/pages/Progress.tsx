@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useOutletContext } from 'react-router-dom';
 import { TrendingUp, TrendingDown, Minus, Sparkles, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '../api/client';
+import { apiUrl } from '../api/serverUrl';
 import MuscleMap from '../components/ui/MuscleMap';
 
 interface OutletCtx { userId: number; }
@@ -250,7 +251,7 @@ function AnalysisPanel({ userId }: { userId: number }) {
     setStatus('streaming');
 
     try {
-      const resp = await fetch('/api/ai/analyze', {
+      const resp = await fetch(apiUrl('/ai/analyze'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: userId }),

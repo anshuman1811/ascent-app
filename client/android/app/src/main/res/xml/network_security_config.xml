@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Ascent server runs on the home network over plain HTTP at an address the user
+     types in (any LAN IP or hostname), so cleartext has to be allowed in general rather
+     than for a fixed list of domains. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

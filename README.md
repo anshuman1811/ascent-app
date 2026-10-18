@@ -2,12 +2,13 @@
 
 A local fitness and meal tracker for one or two people in a household. It runs entirely on your own machine — no account, no cloud, no subscription, and nothing leaves your home network.
 
-![Ascent dashboard](docs/screenshots/dashboard.png)
+![Ascent dashboard](docs/screenshots/dashboard.jpg)
 
 | | |
 |---|---|
 | **[Getting started](docs/getting-started.md)** | Install it, create your profiles, open it on your phone — about five minutes |
-| **[User guide](docs/guide.md)** | Set up your library, routines and regimes, then log workouts and meals |
+| **[User guide](docs/guide.md)** | Every screen, step by step with screenshots: meals, foods, routines, regimes, live workouts, progress, settings |
+| **[Android app](docs/android.md)** | Build and install Ascent as an app on Android phones |
 
 ## How it works
 
@@ -216,8 +217,39 @@ Supported muscle keys: `chest`, `shoulders`, `rear_delts`, `biceps`, `triceps`, 
 
 ---
 
+## Offline mode and sync
+
+Every device keeps a full copy of the database and keeps working when the laptop server is unreachable: logging meals, sets, weights, editing routines, browsing history, PRs and progress. Changes made offline sync automatically when the server is back. The round icon above the Feedback button shows the state (offline, changes waiting, problems) and opens a panel with details and a **Sync now** button.
+
+**How it works**
+
+- The device stores a SQLite copy of the server database in IndexedDB (via [sql.js](https://sql.js.org)). The server's own route handlers (`server/routes/*.js`) are bundled into the client and run against that copy (`client/src/offline/`), so offline dashboards, calorie targets, PR detection and progress charts are computed by the same code as online. No business logic is duplicated.
+- Online, with nothing waiting to sync, the app calls the server directly, as before. Offline, each write runs locally right away and is queued in IndexedDB as an operation (method, path, body, time, and the ids it created). The queue survives restarts.
+- On reconnect the queue is pushed in order (`POST /api/sync/push`). The server replays each operation through the same handlers, in its own transaction, with the time frozen to when it happened, so meal times, set times and workout durations are correct. The device then pulls everything that changed (`GET /api/sync/changes?since=N`, a change log filled by SQLite triggers) and rebuilds its copy.
+- **Ids:** rows created offline get ids from a range private to the device (negative numbers derived from a device number the server hands out). The server keeps those ids, so a set logged into a workout started offline lands on that workout, and two devices can never pick the same id.
+- **Retries:** every write carries an operation id. The server records it, so a push or request that is retried after a lost response is recognised and not applied twice.
+
+**Conflict rules**
+
+- Different rows never conflict. Two devices adding meals or sets offline both keep all their entries; set numbers and PRs are recomputed on the server.
+- If two devices edit the same field, the later edit (by the time it was made) wins, per field. Edits to different fields of the same row both apply. The device whose edit lost sees it in the sync panel.
+- A delete wins over an edit. Edits to, or additions to, something deleted on another device are dropped and listed in the sync panel.
+- Derived values (`is_pb`, `set_number`, `personal_bests`, `updated_at`) are always recomputed by the server, never merged.
+
+**Limits**
+
+- A device needs to reach the server once to download its copy. After a server update that changes the database schema, it needs one online sync before working offline again.
+- AI food parsing and the AI progress analysis need the server.
+- Photos taken offline are stored on the device and uploaded on sync. Photos already on the server show offline only if they were viewed before (browser cache).
+- In a browser, opening the app offline needs the service worker, which browsers only allow on `localhost` or https. On phones that use `http://192.168.x.x`, an open tab keeps working offline, but reloading it doesn't. The Android app has no such limit.
+- Last-writer-wins uses device clocks; a device with a badly wrong clock can win or lose edits it shouldn't.
+
+`node server/scripts/offline-sync-test.js` runs the multi-device sync tests in headless Chrome against a throwaway server. The header of the script explains the setup.
+
+---
+
 ## License
 
 [PolyForm Noncommercial 1.0.0](LICENSE). You're free to use, change and share Ascent for any noncommercial purpose — personal use, hobby projects, research, education, charities. Commercial use isn't permitted.
 
-Third-party material keeps its own terms: the muscle diagram data is from [vulovix/body-muscles](https://github.com/vulovix/body-muscles) (Apache 2.0), and the bundled two-frame exercise photos are from free-exercise-db (CC0).
+Third-party material keeps its own terms: the muscle diagram data is from [vulovix/body-muscles](https://github.com/vulovix/body-muscles) (Apache 2.0); the two-frame exercise photos are from [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (CC0); and the exercise animations, which aren't included here and are fetched by `server/scripts/download-exercise-gifs.py`, are © Gym visual (https://gymvisual.com/), credited in the app under each animation.
