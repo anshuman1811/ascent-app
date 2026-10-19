@@ -878,6 +878,7 @@ function SessionDetailModal({ sessionId, userId, onClose }: { sessionId: number;
                 lastZone = zone;
                 const zm = ZONE_META[zone];
                 const isTimed = ex.exercise_type === 'timed';
+                const isBodyweightEx = ex.load_type === 'bodyweight';
                 return (
                   <div key={ex.id}>
                   {showHeader && (
@@ -901,9 +902,13 @@ function SessionDetailModal({ sessionId, userId, onClose }: { sessionId: number;
                             ) : (
                               <>
                                 <Input type="number" value={editReps} onChange={e => setEditReps(e.target.value)} placeholder="Reps" className="w-16" />
-                                <Input type="number" value={editWeight} onChange={e => setEditWeight(e.target.value)} placeholder="Wt" className="w-16" />
-                                <Select value={editWeightUnit} onChange={e => setEditWeightUnit(e.target.value)}
-                                  options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} className="w-16" />
+                                {!isBodyweightEx && (
+                                  <>
+                                    <Input type="number" value={editWeight} onChange={e => setEditWeight(e.target.value)} placeholder="Wt" className="w-16" />
+                                    <Select value={editWeightUnit} onChange={e => setEditWeightUnit(e.target.value)}
+                                      options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} className="w-16" />
+                                  </>
+                                )}
                               </>
                             )}
                             <button
@@ -911,7 +916,7 @@ function SessionDetailModal({ sessionId, userId, onClose }: { sessionId: number;
                                 setId: set.id,
                                 reps: isTimed ? undefined : (parseInt(editReps) || undefined),
                                 duration: isTimed ? (parseFloat(editDuration) || undefined) : undefined,
-                                weight: editWeight ? parseFloat(editWeight) : undefined,
+                                weight: !isBodyweightEx && editWeight ? parseFloat(editWeight) : undefined,
                                 weightUnit: editWeightUnit,
                               })}
                               disabled={updateSet.isPending}
@@ -929,7 +934,7 @@ function SessionDetailModal({ sessionId, userId, onClose }: { sessionId: number;
                             <span className="text-xs text-white">
                               {isTimed
                                 ? `${set.actual_duration_seconds}s`
-                                : `${set.actual_reps} × ${set.actual_weight_value ?? 0}${set.actual_weight_unit}`}
+                                : (set.actual_weight_value && !isBodyweightEx ? `${set.actual_reps} × ${set.actual_weight_value}${set.actual_weight_unit}` : `${set.actual_reps} reps`)}
                             </span>
                             {set.is_pb === 1 && <span className="text-[10px] font-bold text-yellow-400">PR</span>}
                             {set.is_pb === 2 && <span className="text-[10px] font-bold text-gray-500">=PR</span>}
@@ -2119,7 +2124,7 @@ function RoutinePickerList({
                     <span className="text-gray-600 w-4 shrink-0">{idx + 1}.</span>
                     <span className="text-gray-300 flex-1 truncate">{re.exercise_name}</span>
                     <span className="text-gray-500 shrink-0">
-                      {re.sets} × {re.exercise_type === 'timed' ? `${re.duration_seconds}s` : `${re.reps}${re.weight_value ? ` @ ${re.weight_value}${re.weight_unit}` : ''}`}
+                      {re.sets} × {re.exercise_type === 'timed' ? `${re.duration_seconds}s` : `${re.reps}${re.weight_value && re.load_type !== 'bodyweight' ? ` @ ${re.weight_value}${re.weight_unit}` : ''}`}
                     </span>
                   </div>
                 ))}

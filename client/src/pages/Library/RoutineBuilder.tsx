@@ -226,9 +226,9 @@ export default function RoutineBuilder({ userId: propUserId }: { userId?: number
                               <Input label="Rest (s)" type="number" value={editForm.rest_seconds}
                                 onChange={e => setEditForm(f => ({ ...f, rest_seconds: parseInt(e.target.value) || 0 }))} />
                             </div>
-                            {re.exercise_type === 'reps' && (
+                            {re.exercise_type === 'reps' && re.load_type !== 'bodyweight' && (
                               <div className="grid grid-cols-2 gap-1.5">
-                                <Input label="Weight" type="number" value={editForm.weight_value}
+                                <Input label={re.load_type === 'bodyweight_plus' ? 'Added weight' : 'Weight'} type="number" value={editForm.weight_value}
                                   onChange={e => setEditForm(f => ({ ...f, weight_value: e.target.value }))} />
                                 <Select label="Unit" value={editForm.weight_unit}
                                   onChange={e => setEditForm(f => ({ ...f, weight_unit: e.target.value }))}
@@ -241,7 +241,7 @@ export default function RoutineBuilder({ userId: propUserId }: { userId?: number
                                 sets: editForm.sets,
                                 reps: re.exercise_type === 'reps' ? editForm.reps : undefined,
                                 duration_seconds: re.exercise_type === 'timed' ? editForm.duration_seconds : undefined,
-                                weight_value: editForm.weight_value ? parseFloat(editForm.weight_value) : null,
+                                weight_value: re.load_type !== 'bodyweight' && editForm.weight_value ? parseFloat(editForm.weight_value) : null,
                                 weight_unit: editForm.weight_unit,
                                 rest_seconds: editForm.rest_seconds,
                               }})} disabled={updateRoutineEx.isPending} className="flex-1">
@@ -255,7 +255,7 @@ export default function RoutineBuilder({ userId: propUserId }: { userId?: number
                             {re.exercise_type === 'timed'
                               ? `${re.duration_seconds}s`
                               : `${re.reps} reps`}
-                            {re.weight_value ? ` @ ${re.weight_value} ${re.weight_unit}` : ''}
+                            {re.weight_value && re.load_type !== 'bodyweight' ? ` @ ${re.weight_value} ${re.weight_unit}` : ''}
                             {' · '}{re.rest_seconds}s rest
                           </p>
                         )}
@@ -450,7 +450,7 @@ function AddExerciseToRoutineModal({ open, routineId, exercises, onClose, onAdde
       sets: form.sets,
       reps: selectedEx?.exercise_type === 'reps' ? form.reps : undefined,
       duration_seconds: selectedEx?.exercise_type === 'timed' ? form.duration_seconds : undefined,
-      weight_value: form.weight_value ? parseFloat(form.weight_value) : undefined,
+      weight_value: selectedEx?.load_type !== 'bodyweight' && form.weight_value ? parseFloat(form.weight_value) : undefined,
       weight_unit: form.weight_unit,
       rest_seconds: form.rest_seconds,
     }),
@@ -567,11 +567,13 @@ function AddExerciseToRoutineModal({ open, routineId, exercises, onClose, onAdde
                 ? <Input label="Duration (s)" type="number" value={form.duration_seconds} onChange={e => setForm(f => ({ ...f, duration_seconds: parseInt(e.target.value) || 30 }))} />
                 : <Input label="Reps" type="number" value={form.reps} onChange={e => setForm(f => ({ ...f, reps: parseInt(e.target.value) || 8 }))} />}
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Input label="Weight (optional)" type="number" value={form.weight_value} onChange={e => setForm(f => ({ ...f, weight_value: e.target.value }))} placeholder="0" />
-              <Select label="Unit" value={form.weight_unit} onChange={e => setForm(f => ({ ...f, weight_unit: e.target.value }))}
-                options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
-            </div>
+            {selectedEx.load_type !== 'bodyweight' && (
+              <div className="grid grid-cols-2 gap-2">
+                <Input label={selectedEx.load_type === 'bodyweight_plus' ? 'Added weight (optional)' : 'Weight (optional)'} type="number" value={form.weight_value} onChange={e => setForm(f => ({ ...f, weight_value: e.target.value }))} placeholder="0" />
+                <Select label="Unit" value={form.weight_unit} onChange={e => setForm(f => ({ ...f, weight_unit: e.target.value }))}
+                  options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
+              </div>
+            )}
             <Input label="Rest (seconds)" type="number" value={form.rest_seconds} onChange={e => setForm(f => ({ ...f, rest_seconds: parseInt(e.target.value) || 90 }))}
               onKeyDown={e => { if (e.key === 'Enter' && selectedExId && !add.isPending) add.mutate(); }} />
           </>
@@ -617,7 +619,7 @@ function SwapExerciseModal({ open, current, exercises, onClose, onSwapped }: {
       sets: form.sets,
       reps: selectedEx?.exercise_type === 'reps' ? form.reps : undefined,
       duration_seconds: selectedEx?.exercise_type === 'timed' ? form.duration_seconds : undefined,
-      weight_value: form.weight_value ? parseFloat(form.weight_value) : undefined,
+      weight_value: selectedEx?.load_type !== 'bodyweight' && form.weight_value ? parseFloat(form.weight_value) : undefined,
       weight_unit: form.weight_unit,
       rest_seconds: form.rest_seconds,
     }),
@@ -683,11 +685,13 @@ function SwapExerciseModal({ open, current, exercises, onClose, onSwapped }: {
                 ? <Input label="Duration (s)" type="number" value={form.duration_seconds} onChange={e => setForm(f => ({ ...f, duration_seconds: parseInt(e.target.value) || 30 }))} />
                 : <Input label="Reps" type="number" value={form.reps} onChange={e => setForm(f => ({ ...f, reps: parseInt(e.target.value) || 8 }))} />}
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Input label="Weight (optional)" type="number" value={form.weight_value} onChange={e => setForm(f => ({ ...f, weight_value: e.target.value }))} placeholder="0" />
-              <Select label="Unit" value={form.weight_unit} onChange={e => setForm(f => ({ ...f, weight_unit: e.target.value }))}
-                options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
-            </div>
+            {selectedEx.load_type !== 'bodyweight' && (
+              <div className="grid grid-cols-2 gap-2">
+                <Input label={selectedEx.load_type === 'bodyweight_plus' ? 'Added weight (optional)' : 'Weight (optional)'} type="number" value={form.weight_value} onChange={e => setForm(f => ({ ...f, weight_value: e.target.value }))} placeholder="0" />
+                <Select label="Unit" value={form.weight_unit} onChange={e => setForm(f => ({ ...f, weight_unit: e.target.value }))}
+                  options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
+              </div>
+            )}
             <Input label="Rest (seconds)" type="number" value={form.rest_seconds} onChange={e => setForm(f => ({ ...f, rest_seconds: parseInt(e.target.value) || 90 }))}
               onKeyDown={e => { if (e.key === 'Enter' && selectedExId && !swap.isPending) swap.mutate(); }} />
           </>

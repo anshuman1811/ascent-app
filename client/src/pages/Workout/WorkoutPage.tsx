@@ -275,7 +275,7 @@ export default function WorkoutPage({ userId: propUserId }: { userId?: number })
                                   <span className="text-gray-600 w-4 shrink-0">{idx + 1}.</span>
                                   <span className="text-gray-300 flex-1 truncate">{re.exercise_name}</span>
                                   <span className="text-gray-500 shrink-0">
-                                    {re.sets} × {re.exercise_type === 'timed' ? `${re.duration_seconds}s` : `${re.reps}${re.weight_value ? ` @ ${re.weight_value}${re.weight_unit}` : ''}`}
+                                    {re.sets} × {re.exercise_type === 'timed' ? `${re.duration_seconds}s` : `${re.reps}${re.weight_value && re.load_type !== 'bodyweight' ? ` @ ${re.weight_value}${re.weight_unit}` : ''}`}
                                   </span>
                                 </div>
                               </div>

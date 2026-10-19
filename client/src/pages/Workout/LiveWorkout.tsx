@@ -1303,6 +1303,7 @@ function SwapExerciseModal({ seId, currentEx, onClose, onSwapped }: {
   const options = exercises.filter(e => e.id !== currentEx.exercise_id);
   const selectedEx = exercises.find(e => e.id === exerciseId);
   const isTimed = selectedEx?.exercise_type === 'timed';
+  const isBodyweightEx = selectedEx?.load_type === 'bodyweight';
 
   const swap = useMutation({
     mutationFn: () => api.put(`/workouts/session-exercises/${seId}/swap`, {
@@ -1310,7 +1311,7 @@ function SwapExerciseModal({ seId, currentEx, onClose, onSwapped }: {
       target_sets: parseInt(sets) || currentEx.target_sets,
       target_reps: isTimed ? undefined : (parseInt(reps) || undefined),
       target_duration_seconds: isTimed ? (parseFloat(reps) || undefined) : undefined,
-      target_weight_value: weight ? parseFloat(weight) : undefined,
+      target_weight_value: !isBodyweightEx && weight ? parseFloat(weight) : undefined,
       target_weight_unit: weightUnit,
       rest_seconds: parseInt(restSecs) || currentEx.rest_seconds,
     }),
@@ -1333,9 +1334,9 @@ function SwapExerciseModal({ seId, currentEx, onClose, onSwapped }: {
           <div className="grid grid-cols-2 gap-2">
             <Input label="Sets" type="number" value={sets} onChange={e => setSets(e.target.value)} />
             <Input label={isTimed ? 'Duration (s)' : 'Reps'} type="number" value={reps} onChange={e => setReps(e.target.value)} />
-            {!isTimed && (
+            {!isTimed && !isBodyweightEx && (
               <>
-                <Input label="Weight" type="number" value={weight} onChange={e => setWeight(e.target.value)} />
+                <Input label={selectedEx?.load_type === 'bodyweight_plus' ? 'Added weight' : 'Weight'} type="number" value={weight} onChange={e => setWeight(e.target.value)} />
                 <Select label="Unit" value={weightUnit} onChange={e => setWeightUnit(e.target.value)}
                   options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
               </>
@@ -1380,7 +1381,7 @@ function AddAdHocExerciseModal({ sessionId, onClose, onAdded }: {
       exercise_id: Number(form.exercise_id),
       target_sets: form.target_sets,
       target_reps: selectedEx?.exercise_type === 'reps' ? form.target_reps : undefined,
-      target_weight_value: form.target_weight_value ? parseFloat(form.target_weight_value) : undefined,
+      target_weight_value: selectedEx?.load_type !== 'bodyweight' && form.target_weight_value ? parseFloat(form.target_weight_value) : undefined,
       target_weight_unit: form.target_weight_unit,
       rest_seconds: form.rest_seconds,
     }),
@@ -1399,13 +1400,15 @@ function AddAdHocExerciseModal({ sessionId, onClose, onAdded }: {
           <Input label="Reps" type="number" value={form.target_reps}
             onChange={e => setForm(f => ({ ...f, target_reps: parseInt(e.target.value) || 8 }))} />
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Input label="Weight" type="number" value={form.target_weight_value}
-            onChange={e => setForm(f => ({ ...f, target_weight_value: e.target.value }))} />
-          <Select label="Unit" value={form.target_weight_unit}
-            onChange={e => setForm(f => ({ ...f, target_weight_unit: e.target.value }))}
-            options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
-        </div>
+        {selectedEx?.load_type !== 'bodyweight' && (
+          <div className="grid grid-cols-2 gap-2">
+            <Input label={selectedEx?.load_type === 'bodyweight_plus' ? 'Added weight' : 'Weight'} type="number" value={form.target_weight_value}
+              onChange={e => setForm(f => ({ ...f, target_weight_value: e.target.value }))} />
+            <Select label="Unit" value={form.target_weight_unit}
+              onChange={e => setForm(f => ({ ...f, target_weight_unit: e.target.value }))}
+              options={[{ value: 'lb', label: 'lb' }, { value: 'kg', label: 'kg' }]} />
+          </div>
+        )}
         <div className="flex gap-2 pt-1">
           <Button variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
           <Button onClick={() => add.mutate()} disabled={add.isPending} className="flex-1">Add</Button>

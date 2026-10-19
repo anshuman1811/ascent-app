@@ -6,7 +6,7 @@ function getRoutineWithExercises(routineId) {
   const routine = db.prepare('SELECT * FROM routines WHERE id = ?').get(routineId);
   if (!routine) return null;
   const exercises = db.prepare(`
-    SELECT re.*, e.name as exercise_name, e.exercise_type, e.category,
+    SELECT re.*, e.name as exercise_name, e.exercise_type, e.category, e.load_type,
       e.primary_muscles, e.secondary_muscles, e.met_value,
       e.description, e.notes as exercise_notes, e.gif_url
     FROM routine_exercises re
