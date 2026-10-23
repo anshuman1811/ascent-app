@@ -678,6 +678,7 @@ export default function LiveWorkout({ userId: propUserId, sessionIdOverride, onE
       {swapOpen && currentEx && (
         <SwapExerciseModal
           seId={currentEx.id}
+          userId={userId!}
           currentEx={currentEx}
           onClose={() => setSwapOpen(false)}
           onSwapped={() => { refetch(); setSwapOpen(false); }}
@@ -767,7 +768,7 @@ function ExerciseCard({ sessionId, ex, completedSets, prevSet, history, sessionR
       savedRestRef.current.set(prevExIdRef.current, restStRef.current);
     }
     prevExIdRef.current = ex.id;
-    // Reset input fields
+    // Reset input fields (also after a swap, which keeps the slot but changes the exercise)
     setReps(String(ex.target_reps ?? ''));
     setDuration(String(ex.target_duration_seconds ?? ''));
     setWeight(String(ex.target_weight_value ?? ''));
@@ -781,7 +782,7 @@ function ExerciseCard({ sessionId, ex, completedSets, prevSet, history, sessionR
     // Restore rest state for the new exercise (or initialize fresh)
     setRestSt(savedRestRef.current.get(ex.id) ?? { phase: 'active', restStartTs: null, restElapsed: 0, pendingRestSeconds: undefined });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ex.id]);
+  }, [ex.id, ex.exercise_id]);
 
   // Pre-fill inputs from last session when history arrives (only before first set is logged)
   useEffect(() => {
@@ -1282,8 +1283,9 @@ function ExerciseCard({ sessionId, ex, completedSets, prevSet, history, sessionR
 
 // ─── SwapExerciseModal ────────────────────────────────────────────────────────
 
-function SwapExerciseModal({ seId, currentEx, onClose, onSwapped }: {
+function SwapExerciseModal({ seId, userId, currentEx, onClose, onSwapped }: {
   seId: number;
+  userId: number;
   currentEx: SessionExercise;
   onClose: () => void;
   onSwapped: () => void;
@@ -1304,6 +1306,33 @@ function SwapExerciseModal({ seId, currentEx, onClose, onSwapped }: {
   const selectedEx = exercises.find(e => e.id === exerciseId);
   const isTimed = selectedEx?.exercise_type === 'timed';
   const isBodyweightEx = selectedEx?.load_type === 'bodyweight';
+
+  // When an exercise is picked, default to what was done last time on *that* exercise
+  // (first set of the last session); otherwise keep the slot's sets and rest but drop
+  // the old exercise's reps/weight, which don't carry over between movements.
+  useEffect(() => {
+    if (!selectedEx) return;
+    let cancelled = false;
+    const fallback = () => {
+      const sameType = selectedEx.exercise_type === currentEx.exercise_type;
+      setReps(selectedEx.exercise_type === 'timed'
+        ? String(sameType ? currentEx.target_duration_seconds ?? 30 : 30)
+        : String(sameType ? currentEx.target_reps ?? 8 : 8));
+      setWeight('');
+    };
+    api.get<{ last_sets: Array<{ actual_reps: number | null; actual_duration_seconds: number | null; actual_weight_value: number | null; actual_weight_unit: string }> }>(
+      `/exercises/${selectedEx.id}/history?user_id=${userId}`,
+    ).then(h => {
+      if (cancelled) return;
+      const first = h.last_sets.find(s => selectedEx.exercise_type === 'timed' ? s.actual_duration_seconds : s.actual_reps != null);
+      if (!first) return fallback();
+      setReps(String(selectedEx.exercise_type === 'timed' ? first.actual_duration_seconds : first.actual_reps));
+      setWeight(first.actual_weight_value && selectedEx.load_type !== 'bodyweight' ? String(first.actual_weight_value) : '');
+      if (first.actual_weight_value) setWeightUnit(first.actual_weight_unit ?? 'lb');
+    }).catch(() => { if (!cancelled) fallback(); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEx?.id]);
 
   const swap = useMutation({
     mutationFn: () => api.put(`/workouts/session-exercises/${seId}/swap`, {
