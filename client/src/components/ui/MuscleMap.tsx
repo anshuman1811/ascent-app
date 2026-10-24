@@ -147,8 +147,7 @@ function BodyView({
         viewBox={viewBox}
         xmlns="http://www.w3.org/2000/svg"
         width="100%"
-        height="auto"
-        style={{ display: 'block' }}
+        style={{ display: 'block', height: 'auto' }}
       >
         {muscles.map(m => (
           <path
