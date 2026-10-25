@@ -34,5 +34,5 @@ logs/
 .claude/
 
 # Exercise demo GIFs — fetched by server/scripts/download-exercise-gifs.py; they're
-# © Gym visual and not ours to redistribute (the CC0 two-frame JPGs do ship)
+# © Gym visual and not ours to redistribute
 client/public/exercises/*.gif

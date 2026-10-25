@@ -252,4 +252,4 @@ Every device keeps a full copy of the database and keeps working when the laptop
 
 [PolyForm Noncommercial 1.0.0](LICENSE). You're free to use, change and share Ascent for any noncommercial purpose — personal use, hobby projects, research, education, charities. Commercial use isn't permitted.
 
-Third-party material keeps its own terms: the muscle diagram data is from [vulovix/body-muscles](https://github.com/vulovix/body-muscles) (Apache 2.0); the two-frame exercise photos are from [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (CC0); and the exercise animations, which aren't included here and are fetched by `server/scripts/download-exercise-gifs.py`, are © Gym visual (https://gymvisual.com/), credited in the app under each animation.
+Third-party material keeps its own terms: the muscle diagram data is from [vulovix/body-muscles](https://github.com/vulovix/body-muscles) (Apache 2.0); the exercise animations, which aren't included here and are fetched by `server/scripts/download-exercise-gifs.py`, are © Gym visual (https://gymvisual.com/), credited in the app under each animation.

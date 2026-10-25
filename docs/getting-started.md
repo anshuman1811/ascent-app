@@ -75,7 +75,7 @@ There is no login: anyone on your network who has the address can use the app. K
 
 ### Exercise demo GIFs
 
-Exercises work without them, but you can download short demo animations for about 100 exercises (needs `python3`); a few dozen more already ship with a two-photo illustration, and the rest simply show none:
+Exercises work without them, but you can download short anatomy-style demo animations for about 100 of the 136 exercises (needs `python3`); the rest simply show none:
 
 ```bash
 python3 server/scripts/download-exercise-gifs.py

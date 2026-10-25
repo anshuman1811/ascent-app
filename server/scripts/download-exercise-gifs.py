@@ -6,16 +6,12 @@ a live CDN. The animations are (c) Gym visual - https://gymvisual.com/ and are
 redistributed by that repo with permission at 180x180, on condition that the
 attribution is kept; the app shows it under each GIF (ExerciseAnimation.tsx).
 
-Also fetches the two-frame JPG pairs from yuhonas/free-exercise-db (CC0) used
-for moves the GIF set doesn't cover (TWO_FRAME below).
-
 Run: python3 server/scripts/download-exercise-gifs.py
 """
 import os
 import urllib.request
 
 BASE = "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/"
-TWO_FRAME_BASE = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/"
 OUT_DIR = os.path.join(os.path.dirname(__file__), "../../client/public/exercises")
 
 # exercise name (matches LOCAL_GIFS in server/db/index.js) -> remote gif path.
@@ -118,28 +114,9 @@ MAPPING = {
     "Arnold Press":               "videos/2137-Xy4jlWA.gif",
     "Dumbbell Preacher Curl":     "videos/0372-jivWf8n.gif",
     "EZ Bar Curl":                "videos/0447-6TG6x2w.gif",
+    "Child's Pose":              "videos/1346-f38OEuO.gif",  # kneeling lat stretch
+    "Hip Flexor Lunge (Dynamic)": "videos/3470-kMzUs9Y.gif",  # forward lunge (male)
 }
-
-# local slug (matches LOCAL_TWO_FRAME in server/db/index.js) -> free-exercise-db id;
-# saved as exercises/<slug>/0.jpg and 1.jpg.
-TWO_FRAME = {
-    "bodyweight-squat":          "Bodyweight_Squat",
-    "box-jump":                  "Front_Box_Jump",
-    "band-pull-apart":           "Band_Pull_Apart",
-    "cat-cow":                   "Cat_Stretch",
-    "childs-pose":               "Childs_Pose",
-    "arm-circles":               "Arm_Circles",
-    "foam-rolling-quads":        "Quadriceps-SMR",
-    "foam-rolling-it-band":      "Iliotibial_Tract-SMR",
-    "foam-rolling-hamstrings":   "Hamstring-SMR",
-    "foam-rolling-upper-back":   "Rhomboids-SMR",
-    "rowing-erg":                "Rowing_Stationary",
-    "sled-push":                 "Sled_Push",
-    "seated-hamstring-stretch":  "Seated_Floor_Hamstring_Stretch",
-    "hip-flexor-stretch":        "Kneeling_Hip_Flexor",
-    "hip-flexor-lunge-dynamic":  "Standing_Hip_Flexors",
-}
-
 
 def slugify(name: str) -> str:
     cleaned = (name.lower().replace("'", "").replace("(", "").replace(")", "")
@@ -169,21 +146,6 @@ def main():
         except Exception as e:
             failed.append((name, str(e)))
             print(f"FAIL {name:35s} -> {e}")
-
-    for slug, remote_id in TWO_FRAME.items():
-        try:
-            os.makedirs(os.path.join(OUT_DIR, slug), exist_ok=True)
-            size = 0
-            for frame in ("0", "1"):
-                data = fetch(f"{TWO_FRAME_BASE}{remote_id}/{frame}.jpg")
-                with open(os.path.join(OUT_DIR, slug, f"{frame}.jpg"), "wb") as f:
-                    f.write(data)
-                size += len(data)
-            ok.append((slug, slug, size))
-            print(f"OK   {slug:35s} -> exercises/{slug}/0.jpg+1.jpg ({size//1024}KB)")
-        except Exception as e:
-            failed.append((slug, str(e)))
-            print(f"FAIL {slug:35s} -> {e}")
 
     print(f"\n{len(ok)} downloaded, {len(failed)} failed")
     total_kb = sum(sz for _, _, sz in ok) // 1024

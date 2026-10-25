@@ -788,9 +788,9 @@ db.transaction(() => {
 // single animated GIF (downloaded via server/scripts/download-exercise-gifs.py from
 // hasaneyldrm/exercises-dataset — animations © Gym visual, redistributed there with
 // permission on condition of attribution, which ExerciseAnimation.tsx shows)
-// or a local two-frame JPG pair mirrored from free-exercise-db (CC0), served at
-// /exercises/*.gif or /exercises/<slug>/0.jpg respectively. No exercise depends on a
-// live external CDN — setGif always overwrites, since these are app-managed visuals,
+// served at /exercises/<slug>.gif. Only these anatomy-style animations are used — no
+// photos of real people (the household's preference); a move with no matching GIF
+// simply has no illustration. No exercise depends on a live external CDN — setGif always overwrites, since these are app-managed visuals,
 // not user content.
 {
   const setGif = db.prepare(`UPDATE exercises SET gif_url = ? WHERE name = ?`);
@@ -898,37 +898,15 @@ db.transaction(() => {
     // Same movement as an existing illustration.
     'Pause Squat':                'back-squat',
     'Face Pull (Warm-up)':        'face-pull',
-  };
-
-  // Two-frame local pairs (client/public/exercises/<slug>/0.jpg + 1.jpg) — the same
-  // frame-swap convention ExerciseAnimation.tsx uses for remote two-frame sources,
-  // just self-hosted instead of hotlinked (mirrored from free-exercise-db, CC0). Only
-  // used where the GIF dataset has nothing that matches the move.
-  const LOCAL_TWO_FRAME = {
-    'Bodyweight Squat':          'bodyweight-squat',
-    'Bodyweight Pause Squat':    'bodyweight-squat',
-    'Box Jump':                  'box-jump',    // the GIF set only has a jump *down* from a box
-    'Band Pull-Apart':           'band-pull-apart',
-    'Cat-Cow':                   'cat-cow',
-    "Child's Pose":              'childs-pose',
-    'Arm Circles':               'arm-circles',
-    'Foam Rolling — Quads':      'foam-rolling-quads',
-    'Foam Rolling — IT Band':    'foam-rolling-it-band',
-    'Foam Rolling — Hamstrings': 'foam-rolling-hamstrings',
-    'Foam Rolling — Upper Back': 'foam-rolling-upper-back',
-    'Rowing (Erg)':              'rowing-erg',
-    'Sled Push':                 'sled-push',
-    'Seated Hamstring Stretch':  'seated-hamstring-stretch',
-    'Hip Flexor Stretch':        'hip-flexor-stretch',
-    'Hip Flexor Lunge (Dynamic)': 'hip-flexor-lunge-dynamic',
+    "Child's Pose":               'childs-pose',               // dataset: kneeling lat stretch
+    'Hip Flexor Lunge (Dynamic)': 'hip-flexor-lunge-dynamic',  // dataset: forward lunge
   };
 
   db.transaction(() => {
+    // Drop the two-frame photo illustrations earlier versions used (real people).
+    db.prepare(`UPDATE exercises SET gif_url = NULL WHERE gif_url LIKE '/exercises/%/0.jpg'`).run();
     for (const [name, slug] of Object.entries(LOCAL_GIFS)) {
       setGif.run(`/exercises/${slug}.gif`, name);
-    }
-    for (const [name, slug] of Object.entries(LOCAL_TWO_FRAME)) {
-      setGif.run(`/exercises/${slug}/0.jpg`, name);
     }
   })();
 }
