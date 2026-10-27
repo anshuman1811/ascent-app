@@ -87,8 +87,10 @@ function RestCard({ target, remaining, overtimeSeconds, isOver, label, buttonLab
 
 export default function LiveWorkout({ userId: propUserId, sessionIdOverride, onExit }: { userId?: number; sessionIdOverride?: number; onExit?: () => void }) {
   const ctx = useOutletContext<OutletCtx | null>();
-  const { activeUserId } = useAppStore();
-  const userId = propUserId ?? ctx?.userId ?? activeUserId;
+  const { activeUserId, setActiveUserId, users } = useAppStore();
+  // Who is looking at the screen. The workout itself may belong to someone else (e.g. it
+  // was started from the other person's half of split-screen) — see `userId` below.
+  const viewerUserId = propUserId ?? ctx?.userId ?? activeUserId;
   const { sessionId: paramId } = useParams();
   const sessionId = sessionIdOverride ?? Number(paramId);
   const navigate = useNavigate();
@@ -122,6 +124,17 @@ export default function LiveWorkout({ userId: propUserId, sessionIdOverride, onE
     refetchInterval: 15_000,   // poll for multi-device sync
     refetchIntervalInBackground: false,
   });
+
+  // Everything on this screen — last session, PRs, body weight for calories — belongs to
+  // the workout's owner, never to whoever happens to be selected in the app.
+  const userId = session?.user_id ?? viewerUserId;
+  const ownerName = users.find(u => u.id === session?.user_id)?.name;
+  // Outside split-screen, switch the app to the workout's owner so every other screen
+  // (dashboard, history) matches what's being tracked.
+  useEffect(() => {
+    if (!propUserId && session?.user_id && session.user_id !== activeUserId) setActiveUserId(session.user_id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user_id]);
 
   // For the live calorie counter — same weight source the server uses at finish time.
   const { data: latestWeight } = useQuery({
@@ -415,7 +428,7 @@ export default function LiveWorkout({ userId: propUserId, sessionIdOverride, onE
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-800">
         <div>
-          <p className="text-xs text-gray-500">Workout</p>
+          <p className="text-xs text-gray-500">{ownerName ? `${ownerName}'s workout` : 'Workout'}</p>
           <p className="text-sm font-semibold text-white">{session.name}</p>
         </div>
         <div className="flex items-center gap-3">

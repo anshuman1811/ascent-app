@@ -252,6 +252,9 @@ export default function Dashboard({ userId: propUserId, hidePeer }: { userId?: n
       setSession(session.id, vars.uid);
       qc.invalidateQueries({ queryKey: ['active-session', vars.uid] });
       setStartWorkoutOpen(false);
+      // The live screen is a full-app page: select the workout's owner first so leaving
+      // split-screen doesn't land on the other person.
+      setActiveUserId(vars.uid);
       navigate(`/workout/live/${session.id}`);
     },
   });
@@ -2189,7 +2192,7 @@ function StartWorkoutModal({ open, users, userId, onClose, onStart, onStartPair,
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Start Workout" size="sm">
+    <Modal open={open} onClose={onClose} title={mode === 'pair' || !activeUser ? 'Start Workout' : `Start Workout — ${activeUser.name}`} size="sm">
       <div className="space-y-4">
         {users.length === 2 && (
           <div className="flex gap-1 bg-gray-800 rounded-xl p-1">
