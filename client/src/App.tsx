@@ -51,7 +51,7 @@ function AppRoutes({ userId }: { userId?: number }) {
 }
 
 function AppInner() {
-  const { setUsers } = useAppStore();
+  const { setUsers, setActiveUserId } = useAppStore();
   const navigate = useNavigate();
   useAndroidBackButton();
   const [searchParams] = useSearchParams();
@@ -81,15 +81,26 @@ function AppInner() {
   }
 
   if (isLivePair) {
-    const exitPair = () => navigate('/dashboard');
+    // One person finishing (or leaving) doesn't end the other's workout: carry on with it
+    // full-screen if it's still running, otherwise back to the dashboard.
+    const exitPane = (i: 0 | 1) => async () => {
+      const other = 1 - i;
+      const otherSession = await api.get<{ status: string }>(`/workouts/${liveSessionIds![other]}`).catch(() => null);
+      if (otherSession?.status === 'in_progress') {
+        setActiveUserId(liveUserIds![other]);
+        navigate(`/workout/live/${liveSessionIds![other]}`);
+      } else {
+        navigate('/dashboard');
+      }
+    };
     return (
       <div className="force-landscape">
         <div className="flex flex-row h-full w-full overflow-hidden bg-gray-950">
           <div className="flex-1 border-r border-gray-800 overflow-auto min-h-0">
-            <LiveWorkout sessionIdOverride={liveSessionIds![0]} userId={liveUserIds![0]} onExit={exitPair} />
+            <LiveWorkout sessionIdOverride={liveSessionIds![0]} userId={liveUserIds![0]} onExit={exitPane(0)} />
           </div>
           <div className="flex-1 overflow-auto min-h-0">
-            <LiveWorkout sessionIdOverride={liveSessionIds![1]} userId={liveUserIds![1]} onExit={exitPair} />
+            <LiveWorkout sessionIdOverride={liveSessionIds![1]} userId={liveUserIds![1]} onExit={exitPane(1)} />
           </div>
         </div>
         <BugReportButton />

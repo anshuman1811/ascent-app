@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOutletContext, useNavigate, useParams } from 'react-router-dom';
-import { CheckCircle, SkipForward, X, Trophy, Timer, Dumbbell, Clock, Plus, Pencil, Check, Flame, BookOpen, ArrowLeftRight, ChevronUp, ChevronDown, GripVertical, AlertTriangle, Trash2, Undo2 } from 'lucide-react';
+import { CheckCircle, SkipForward, X, Trophy, Timer, Dumbbell, Clock, Plus, Pencil, Check, Flame, BookOpen, ArrowLeftRight, ChevronUp, ChevronDown, GripVertical, AlertTriangle, Trash2, Undo2, UserPlus, Users } from 'lucide-react';
 import { api } from '../../api/client';
 import { useAppStore, useWorkoutStore } from '../../store/appStore';
-import type { WorkoutSession, SessionExercise, SetLog, Exercise, ExerciseCategory, WeightLog } from '../../types';
+import type { WorkoutSession, SessionExercise, SetLog, Exercise, ExerciseCategory, WeightLog, User } from '../../types';
+import { useRoutinePickerState, RoutinePickerList } from '../Dashboard';
 import { formatDuration, parseSQLiteLocal } from '../../utils/units';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -129,6 +130,20 @@ export default function LiveWorkout({ userId: propUserId, sessionIdOverride, onE
   // the workout's owner, never to whoever happens to be selected in the app.
   const userId = session?.user_id ?? viewerUserId;
   const ownerName = users.find(u => u.id === session?.user_id)?.name;
+  // Joining: the other person in the household can start their own workout from here and
+  // both open side by side. Not offered inside the side-by-side view itself.
+  const otherUser = !sessionIdOverride && users.length === 2 && session ? users.find(u => u.id !== session.user_id) : undefined;
+  const { data: otherActive } = useQuery({
+    queryKey: ['active-session', otherUser?.id],
+    queryFn: () => api.get<WorkoutSession | null>(`/workouts/user/${otherUser!.id}/active`),
+    enabled: !!otherUser,
+    refetchInterval: 30_000,
+  });
+  const [joinOpen, setJoinOpen] = useState(false);
+  const openTogether = (otherSessionId: number) => {
+    window.location.href = `/?liveSessions=${sessionId},${otherSessionId}&liveUsers=${session!.user_id},${otherUser!.id}`;
+  };
+
   // Outside split-screen, switch the app to the workout's owner so every other screen
   // (dashboard, history) matches what's being tracked.
   useEffect(() => {
@@ -450,6 +465,15 @@ export default function LiveWorkout({ userId: propUserId, sessionIdOverride, onE
               <span>{restIsOver ? `+${restOvertime}s` : `${restSecondsLeft}s`}</span>
             </div>
           )}
+          {otherUser && (
+            <Button size="sm" variant="secondary"
+              onClick={() => otherActive ? openTogether(otherActive.id) : setJoinOpen(true)}
+              title={otherActive ? `Show ${otherUser.name}'s workout side by side` : `${otherUser.name} joins — start their workout alongside`}
+              className="text-xs px-2.5 py-1.5">
+              {otherActive ? <Users size={13} /> : <UserPlus size={13} />}
+              <span className="hidden sm:inline">{otherActive ? 'Train together' : `+ ${otherUser.name}`}</span>
+            </Button>
+          )}
           <Button size="sm" onClick={handleFinish} disabled={completeSession.isPending} className="bg-green-700 hover:bg-green-600 text-white text-xs px-3 py-1.5">
             {completeSession.isPending ? 'Saving…' : 'Finish'}
           </Button>
@@ -655,6 +679,10 @@ export default function LiveWorkout({ userId: propUserId, sessionIdOverride, onE
             </div>
           </div>
         </Modal>
+      )}
+
+      {joinOpen && otherUser && (
+        <JoinWorkoutModal joiner={otherUser} onClose={() => setJoinOpen(false)} onJoined={openTogether} />
       )}
 
       {/* Finish early confirm */}
@@ -1504,6 +1532,55 @@ function ReorderExercisesModal({ exercises, onClose, onReordered }: {
       </div>
       <div className="pt-3">
         <Button variant="secondary" onClick={onClose} className="w-full">Done</Button>
+      </div>
+    </Modal>
+  );
+}
+
+// The other person joins mid-workout: starts only *their* workout (an ongoing one of theirs
+// is kept, never replaced) and opens both side by side.
+function JoinWorkoutModal({ joiner, onClose, onJoined }: {
+  joiner: User;
+  onClose: () => void;
+  onJoined: (sessionId: number) => void;
+}) {
+  const picker = useRoutinePickerState(joiner, true);
+  const [routineId, setRoutineId] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const pickedRef = useRef(false);
+  useEffect(() => {
+    if (pickedRef.current || picker.suggestedRoutineId == null) return;
+    pickedRef.current = true;
+    setRoutineId(picker.suggestedRoutineId);
+  }, [picker.suggestedRoutineId]);
+
+  const start = useMutation({
+    mutationFn: () => api.post<WorkoutSession>('/workouts/start', { user_id: joiner.id, routine_id: routineId ?? undefined, keep_existing: true }),
+    onSuccess: s => onJoined(s.id),
+  });
+
+  return (
+    <Modal open onClose={onClose} title={`${joiner.name} joins`} size="sm">
+      <div className="space-y-4">
+        <p className="text-xs text-gray-400">
+          Starts {joiner.name}'s own workout and shows both side by side. This workout carries on exactly as it is.
+        </p>
+        <div>
+          <p className="text-xs text-gray-500 mb-2">{joiner.name}'s routine</p>
+          <RoutinePickerList
+            sortedRoutines={picker.sortedRoutines}
+            lastDoneMap={picker.lastDoneMap}
+            suggestedRoutineId={picker.suggestedRoutineId}
+            selected={routineId}
+            onSelect={id => { pickedRef.current = true; setRoutineId(id); }}
+            expandedId={expanded}
+            onToggleExpand={setExpanded}
+          />
+        </div>
+        {start.isError && <p className="text-xs text-red-400">{(start.error as Error).message}</p>}
+        <Button onClick={() => start.mutate()} disabled={start.isPending} className="w-full">
+          {start.isPending ? 'Starting…' : `Start ${joiner.name}'s workout`}
+        </Button>
       </div>
     </Modal>
   );

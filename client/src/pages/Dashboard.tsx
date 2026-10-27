@@ -262,8 +262,9 @@ export default function Dashboard({ userId: propUserId, hidePeer }: { userId?: n
   const startPairSessions = useMutation({
     mutationFn: async ({ routineIds }: { routineIds: Record<number, number | undefined> }) => {
       const [s1, s2] = await Promise.all([
-        api.post<WorkoutSession>('/workouts/start', { user_id: users[0]?.id, routine_id: routineIds[users[0]?.id] }),
-        api.post<WorkoutSession>('/workouts/start', { user_id: users[1]?.id, routine_id: routineIds[users[1]?.id] }),
+        // keep_existing: whoever is already mid-workout carries on with it (never abandoned)
+        api.post<WorkoutSession>('/workouts/start', { user_id: users[0]?.id, routine_id: routineIds[users[0]?.id], keep_existing: true }),
+        api.post<WorkoutSession>('/workouts/start', { user_id: users[1]?.id, routine_id: routineIds[users[1]?.id], keep_existing: true }),
       ]);
       return [s1, s2];
     },
@@ -720,6 +721,10 @@ export default function Dashboard({ userId: propUserId, hidePeer }: { userId?: n
           onClose={() => setStartWorkoutOpen(false)}
           onStart={(routineId, uid) => startSession.mutate({ routineId, uid: uid ?? userId! })}
           onStartPair={(routineIds) => startPairSessions.mutate({ routineIds })}
+          busy={{
+            ...(activeWorkout ? { [userId]: activeWorkout.name } : {}),
+            ...(otherActiveWorkout && otherUser ? { [otherUser.id]: otherActiveWorkout.name } : {}),
+          }}
           loading={startSession.isPending || startPairSessions.isPending}
         />
       )}
@@ -2016,7 +2021,7 @@ function AddFoodModal({ open, mealId, userId, onClose, onAdded }: {
 
 // ─── Start Workout Modal ──────────────────────────────────────────────────────
 
-function useRoutinePickerState(user: User | undefined, open: boolean) {
+export function useRoutinePickerState(user: User | undefined, open: boolean) {
   const uid = user?.id;
   const { data: routines = [] } = useQuery({
     queryKey: ['routines', uid],
@@ -2060,7 +2065,7 @@ function useRoutinePickerState(user: User | undefined, open: boolean) {
   return { sortedRoutines, lastDoneMap, suggestedRoutineId, historyLength: recentHistory.length };
 }
 
-function RoutinePickerList({
+export function RoutinePickerList({
   sortedRoutines, lastDoneMap, suggestedRoutineId,
   selected, onSelect,
   expandedId, onToggleExpand,
@@ -2140,8 +2145,10 @@ function RoutinePickerList({
   );
 }
 
-function StartWorkoutModal({ open, users, userId, onClose, onStart, onStartPair, loading }: {
+function StartWorkoutModal({ open, users, userId, onClose, onStart, onStartPair, loading, busy = {} }: {
   open: boolean;
+  /** user id → name of the workout they're already in the middle of (kept, not replaced) */
+  busy?: Record<number, string>;
   users: User[];
   userId: number;
   onClose: () => void;
@@ -2235,6 +2242,11 @@ function StartWorkoutModal({ open, users, userId, onClose, onStart, onStartPair,
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ background: user.avatar_color }} />
                   <p className="text-xs text-gray-400 font-medium">{user.name}</p>
                 </div>
+                {busy[user.id] ? (
+                  <p className="text-xs text-gray-300 bg-gray-800 rounded-lg px-3 py-2">
+                    Already training: <span className="text-white font-medium">{busy[user.id]}</span> — carries on as is.
+                  </p>
+                ) : (
                 <RoutinePickerList
                   sortedRoutines={picker.sortedRoutines}
                   lastDoneMap={picker.lastDoneMap}
@@ -2244,6 +2256,7 @@ function StartWorkoutModal({ open, users, userId, onClose, onStart, onStartPair,
                   expandedId={expanded}
                   onToggleExpand={setExpanded}
                 />
+                )}
               </div>
             ))}
           </div>

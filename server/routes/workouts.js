@@ -228,8 +228,16 @@ router.get('/user/:userId/active', (req, res) => {
 
 // POST /api/workouts/start — start a new session
 router.post('/start', (req, res) => {
-  const { user_id, routine_id, name } = req.body;
+  const { user_id, routine_id, name, keep_existing } = req.body;
   if (!user_id) return res.status(400).json({ error: 'user_id is required' });
+
+  // Joining someone (or starting a pair) must never end a workout already under way:
+  // with keep_existing, an in-progress session is returned as-is instead of replaced.
+  if (keep_existing) {
+    const existing = db.prepare(`SELECT id FROM workout_sessions WHERE user_id = ? AND status = 'in_progress'
+      ORDER BY started_at DESC LIMIT 1`).get(user_id);
+    if (existing) return res.json(getSession(existing.id));
+  }
 
   // Abandon any existing in-progress session
   db.prepare(`UPDATE workout_sessions SET status = 'abandoned', completed_at = datetime('now'),
